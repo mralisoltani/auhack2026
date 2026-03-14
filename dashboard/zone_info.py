@@ -1,5 +1,7 @@
 """Zone metadata: coordinates and country information for the map."""
 
+from src.zone_registry import get_custom_zone_info
+
 # Approximate center coordinates (lat, lon) for each bidding zone
 ZONE_COORDS = {
     "AT": (47.5162, 14.5501),   # Austria
@@ -94,11 +96,22 @@ ZONE_INFO = {
 
 def get_zone_coords(zone: str) -> tuple[float, float]:
     """Return (lat, lon) for a zone. Falls back to Germany if unknown."""
+    custom = get_custom_zone_info(zone)
+    if custom:
+        return (custom["lat"], custom["lon"])
     return ZONE_COORDS.get(zone, ZONE_COORDS["DE"])
 
 
 def get_zone_info(zone: str) -> dict:
     """Return info dict for a zone. Falls back to generic if unknown."""
+    custom = get_custom_zone_info(zone)
+    if custom:
+        return {
+            "name": custom["name"],
+            "full": f"{custom['name']} ({zone})",
+            "capital": custom.get("capital", "—"),
+            "description": custom.get("description", "Custom zone added via dashboard."),
+        }
     return ZONE_INFO.get(zone, {
         "name": zone,
         "full": zone,

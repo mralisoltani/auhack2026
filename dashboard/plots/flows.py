@@ -5,12 +5,13 @@ import matplotlib.pyplot as plt
 
 from dashboard.utils import get_flows_pivot_15min, to_15min, naive_index, format_date_axis, tight_layout
 from src.data_loader import load_spot_price, load_flows_out_of
+from src.zone_registry import get_flow_zones
 
 
 def plot_flows_in(zone: str, start: str, end: str) -> None:
     """Flows into zone."""
     try:
-        pivot = get_flows_pivot_15min(zone)
+        pivot = get_flows_pivot_15min(zone, tuple(get_flow_zones()))
     except (FileNotFoundError, KeyError) as e:
         st.warning(f"No flow data for {zone}: {e}")
         return
@@ -74,7 +75,7 @@ def plot_flows_out(zone: str, start: str, end: str) -> None:
 def plot_net_import_vs_price(zone: str, start: str, end: str) -> None:
     """Net import vs spot price (normalized scatter)."""
     try:
-        pivot = get_flows_pivot_15min(zone)
+        pivot = get_flows_pivot_15min(zone, tuple(get_flow_zones()))
         sp = load_spot_price(zone)
     except FileNotFoundError:
         st.warning(f"No flow or spot price data for {zone}.")

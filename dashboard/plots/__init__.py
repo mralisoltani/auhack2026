@@ -5,3 +5,5 @@ from .supply_demand import plot_supply_demand
 from .flows import plot_flows_in, plot_flows_out, plot_net_import_vs_price
 from .weather import plot_weather_load, plot_wind_generation
 from .market_coupling import plot_correlation_matrix, plot_price_spreads
+from .prediction import plot_prediction
+from .data_info import plot_data_overview

@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from src.zone_registry import get_custom_zone_info, get_flow_zones
+
 # Zone -> ISO_A2 used in GeoJSON (_ZONE_ISO property)
 ZONE_TO_ISO = {
     "AT": "AT",
@@ -19,6 +21,7 @@ ZONE_TO_ISO = {
 }
 
 # ISO from GeoJSON -> zone (for map click; countries with multiple zones use first)
+# Built-in mapping; custom zones added dynamically in _zone_from_click
 ISO_TO_ZONE = {
     "AT": "AT",
     "BE": "BE",
@@ -76,13 +79,19 @@ def _zone_from_click(data: dict | None, geojson: dict | None = None) -> str | No
     last_object_clicked often doesn't work)."""
     if not data:
         return None
+    # Build ISO -> zone including custom zones
+    iso_to_zone = dict(ISO_TO_ZONE)
+    zone_to_iso = _get_zone_to_iso()
+    for z, iso in zone_to_iso.items():
+        if iso not in iso_to_zone:
+            iso_to_zone[iso] = z
     # Try last_object_clicked first (sometimes works)
     obj = data.get("last_object_clicked") or data.get("last_object_clicked_tooltip")
     if obj and isinstance(obj, dict):
         props = obj.get("properties", {})
-        iso = props.get("_ZONE_ISO")
+        iso = props.get("_ZONE_ISO") or props.get("ISO2") or props.get("ISO_A2")
         if iso:
-            return ISO_TO_ZONE.get(iso)
+            return iso_to_zone.get(iso)
     # Fallback: last_clicked (lat/lng) + point-in-polygon
     click = data.get("last_clicked")
     if not click or not geojson:
@@ -93,9 +102,52 @@ def _zone_from_click(data: dict | None, geojson: dict | None = None) -> str | No
         return None
     for feat in geojson.get("features", []):
         if _point_in_geometry(lng, lat, feat.get("geometry", {})):
-            iso = feat.get("properties", {}).get("_ZONE_ISO")
-            return ISO_TO_ZONE.get(iso) if iso else None
+            props = feat.get("properties", {})
+            iso = props.get("_ZONE_ISO") or props.get("ISO2") or props.get("ISO_A2")
+            return iso_to_zone.get(iso) if iso else None
     return None
+
+
+def _get_zone_to_iso() -> dict:
+    """Zone -> ISO for GeoJSON, including custom zones."""
+    out = dict(ZONE_TO_ISO)
+    for z in get_flow_zones():
+        if z not in out:
+            custom = get_custom_zone_info(z)
+            if custom:
+                out[z] = custom.get("iso", z)
+            else:
+                out[z] = z[:2] if len(z) >= 2 else z
+    return out
+
+
+def _geojson_iso_set(geojson: dict) -> set[str]:
+    """Set of ISO codes present in the GeoJSON."""
+    out = set()
+    for feat in geojson.get("features", []):
+        props = feat.get("properties", {})
+        iso = props.get("_ZONE_ISO") or props.get("ISO2") or props.get("ISO_A2")
+        if iso:
+            out.add(iso)
+    return out
+
+
+def _make_circle_geojson(lat: float, lon: float, radius_km: float = 80) -> dict:
+    """Create a GeoJSON polygon approximating a circle (for custom zones not in main GeoJSON)."""
+    import math
+    points = []
+    for i in range(32):
+        angle = 2 * math.pi * i / 32
+        # ~111 km per degree lat; lon varies by cos(lat)
+        dlat = radius_km / 111 * math.cos(angle)
+        dlon = radius_km / (111 * math.cos(math.radians(lat))) * math.sin(angle)
+        points.append([lon + dlon, lat + dlat])
+    points.append(points[0])
+    return {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {"type": "Polygon", "coordinates": [points]},
+    }
 
 
 def render_zone_map(zone: str, height: int = 280, key: str = "zone_map") -> str | None:
@@ -115,13 +167,16 @@ def render_zone_map(zone: str, height: int = 280, key: str = "zone_map") -> str 
         return None
 
     geojson = _load_geojson()
-    target_iso = ZONE_TO_ISO.get(zone, "DE")
+    zone_to_iso = _get_zone_to_iso()
+    target_iso = zone_to_iso.get(zone, "DE")
+    geojson_isos = _geojson_iso_set(geojson)
 
     lat, lon = get_zone_coords(zone)
     m = folium.Map(location=[lat, lon], zoom_start=4, tiles="CartoDB positron")
 
     def style_fn(feature):
-        iso = feature.get("properties", {}).get("_ZONE_ISO", "")
+        props = feature.get("properties", {})
+        iso = props.get("_ZONE_ISO") or props.get("ISO2") or props.get("ISO_A2") or ""
         is_selected = iso == target_iso
         return {
             "fillColor": "#3388ff" if is_selected else "#e0e0e0",
@@ -140,6 +195,28 @@ def render_zone_map(zone: str, height: int = 280, key: str = "zone_map") -> str 
         ),
     ).add_to(m)
 
+    # Add circle markers for custom zones not in GeoJSON (e.g. Italy)
+    for z in get_flow_zones():
+        custom = get_custom_zone_info(z)
+        if custom:
+            iso = custom.get("iso", z)
+            if iso not in geojson_isos:
+                clat, clon = custom["lat"], custom["lon"]
+                circle_feat = _make_circle_geojson(clat, clon)
+                circle_feat["properties"] = {"_ZONE_ISO": iso, "NAME": custom.get("name", z)}
+                circle_geojson = {"type": "FeatureCollection", "features": [circle_feat]}
+                is_selected = zone_to_iso.get(zone) == iso
+                folium.GeoJson(
+                    circle_geojson,
+                    style_function=lambda f, sel=is_selected: {
+                        "fillColor": "#3388ff" if sel else "#22aa44",
+                        "color": "#1a5fb4" if sel else "#1a7a33",
+                        "weight": 2,
+                        "fillOpacity": 0.7,
+                    },
+                    tooltip=folium.GeoJsonTooltip(fields=["NAME"], aliases=["Zone: "]),
+                ).add_to(m)
+
     data = st_folium(
         m,
         height=height,
@@ -147,4 +224,13 @@ def render_zone_map(zone: str, height: int = 280, key: str = "zone_map") -> str 
         key=key,
         returned_objects=["last_clicked", "last_object_clicked", "last_object_clicked_tooltip"],
     )
-    return _zone_from_click(data, geojson)
+    # Merge custom zone circles into geojson for point-in-polygon click detection
+    merged = dict(geojson)
+    merged["features"] = list(geojson["features"])
+    for z in get_flow_zones():
+        custom = get_custom_zone_info(z)
+        if custom and custom.get("iso") not in geojson_isos:
+            circle_feat = _make_circle_geojson(custom["lat"], custom["lon"])
+            circle_feat["properties"] = {"_ZONE_ISO": custom["iso"], "NAME": custom.get("name", z)}
+            merged["features"].append(circle_feat)
+    return _zone_from_click(data, merged)

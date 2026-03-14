@@ -2,7 +2,8 @@
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
-
+import matplotlib.patches as mpatches
+import numpy as np
 from dashboard.utils import get_flows_pivot_15min, to_15min, naive_index, format_date_axis, tight_layout
 from src.data_loader import load_spot_price, load_flows_out_of
 from src.zone_registry import get_flow_zones
@@ -101,3 +102,44 @@ def plot_net_import_vs_price(zone: str, start: str, end: str) -> None:
     tight_layout(fig)
     st.pyplot(fig)
     plt.close()
+
+
+
+
+def plot_net_import_vs_price_2(zone: str, start: str, end: str) -> None:
+    """Action-oriented dashboard for energy traders."""
+    try:
+        pivot = get_flows_pivot_15min(zone)
+        sp = load_spot_price(zone)
+    except FileNotFoundError:
+        st.warning(f"No data for {zone}.")
+        return
+    join = to_15min(sp).join(pivot["net_import"], how="inner").dropna().loc[start:end]
+    net_z = (join["net_import"] - join["net_import"].mean()) / join["net_import"].std()
+    price_z = (join["price"] - join["price"].mean()) / join["price"].std()
+    def get_action(pz, nz):
+        if pz > 1 and nz > 1: return ('SHORTAGE', '#ff4b4b')  
+        if pz < -1 and nz < -1: return ('SURPLUS', '#238636') 
+        if pz > 1 and nz < -1: return ('EXPORTER GOLD', '#d4a017') 
+        if pz < -1 and nz > 1: return ('ARBITRAGE', '#1f6feb') 
+        return ('NEUTRAL', '#8b949e') # Gray: Hold
+    actions = [get_action(p, n) for p, n in zip(price_z, net_z)]
+    fig, (ax1, ax_strat) = plt.subplots(2, 1, figsize=(12, 8), 
+                                        gridspec_kw={'height_ratios': [5, 1]}, sharex=True)
+    ax1.plot(join.index, join['price'], color='#ff4b4b', label='Spot Price (€)', lw=2)
+    ax2 = ax1.twinx()
+    ax2.fill_between(join.index, join['net_import'], color='#1f6feb', alpha=0.2, label='Net Import (MW)')
+    ax1.set_ylabel("Price (€/MWh)", color='#ff4b4b', fontweight='bold')
+    ax2.set_ylabel("Net Import (MW)", color='#1f6feb', fontweight='bold')
+    ax1.set_title(f"COMMAND CENTER: {zone}", fontsize=16, fontweight='bold')
+
+    for i in range(len(join)-1):
+        ax_strat.axvspan(join.index[i], join.index[i+1], color=actions[i][1], alpha=0.9)
+    ax_strat.set_yticks([])
+    ax_strat.set_xlabel("Time")
+    ax_strat.set_ylabel("ACTION", fontweight='bold')
+    labels = [mpatches.Patch(color=c, label=l) for l, c in 
+              dict(zip([a[0] for a in actions], [a[1] for a in actions])).items()]
+    ax_strat.legend(handles=labels, loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=5, fontsize=9)
+    plt.tight_layout()
+    st.pyplot(fig)

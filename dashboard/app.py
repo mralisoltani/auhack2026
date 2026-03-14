@@ -9,8 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd
 import streamlit as st
-
 from src.zone_registry import get_spot_zones, get_flow_zones
+import numpy as np
+from src.data_loader import SPOT_ZONES, FLOW_ZONES
 from dashboard.zone_info import get_zone_info
 from dashboard.zone_map import render_zone_map
 from dashboard.plots import (
@@ -26,12 +27,14 @@ from dashboard.plots import (
     plot_flows_in,
     plot_flows_out,
     plot_net_import_vs_price,
+    plot_net_import_vs_price_2,
     plot_weather_load,
     plot_wind_generation,
     plot_correlation_matrix,
     plot_price_spreads,
     plot_prediction,
     plot_data_overview,
+    evaluate_renewable_business_case
 )
 
 
@@ -88,7 +91,7 @@ def main():
         # Add new country section
         from dashboard.add_zone_ui import render_add_zone_section
         render_add_zone_section()
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "Data Overview",
         "Spot Prices",
         "Supply & Demand",
@@ -96,7 +99,8 @@ def main():
         "Weather",
         "Market Coupling",
         "Prediction",
-    ])
+        "Marginal Pricing"
+        ])
 
     with tab1:
         plot_data_overview(zone, start_str, end_str)
@@ -130,6 +134,7 @@ def main():
         plot_flows_out(zone, start_str, end_str)
         st.subheader("Net import vs Spot price")
         plot_net_import_vs_price(zone, start_str, end_str)
+        plot_net_import_vs_price_2(zone, start_str, end_str)
 
     with tab5:
         st.subheader("Temperature vs Load")
@@ -148,6 +153,11 @@ def main():
         st.caption("Choose model, click Start train. Trains on first 90%, predicts on last 10% of date range.")
         plot_prediction(zone, start_str, end_str)
 
+    with tab8:
+        st.header("Marginal Pricing Analysis")
+        evaluate_renewable_business_case(zone, start_str, end_str)
+        st.divider()
+        
 
 
 if __name__ == "__main__":

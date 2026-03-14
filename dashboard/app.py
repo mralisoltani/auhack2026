@@ -14,7 +14,12 @@ from src.data_loader import SPOT_ZONES
 from dashboard.plots import (
     plot_spot_prices,
     plot_price_by_hour,
+    plot_renewable_penetration,
     plot_supply_demand,
+    plot_residual_load,
+    plot_generation_mix,
+    plot_penetration_vs_price,
+    plot_fossil_ratio_vs_price,
     plot_flows_in,
     plot_flows_out,
     plot_net_import_vs_price,
@@ -56,9 +61,19 @@ def main():
         st.subheader("Price by hour (all-time)")
         plot_price_by_hour(zone)
 
-    with tab2:
+    with tab2:        
+        st.subheader("Generation Mix")
+        plot_generation_mix(zone, start_str, end_str)
         st.subheader("Load vs Generation")
         plot_supply_demand(zone, start_str, end_str)
+        st.subheader("Residual Load")
+        plot_residual_load(zone, start_str, end_str)
+        st.subheader("Renewable Penetration")
+        plot_renewable_penetration(zone, start_str, end_str)
+        st.subheader("Penetration vs Price")
+        plot_penetration_vs_price(zone, start_str, end_str)
+        st.subheader("Fossil Ratio vs Price")
+        plot_fossil_ratio_vs_price(zone, start_str, end_str)
 
     with tab3:
         st.subheader("Flows into zone")

@@ -98,8 +98,8 @@ def main():
         "Flows",
         "Weather",
         "Market Coupling",
-        "Prediction",
         "Marginal Pricing",
+        "Prediction",
         ])
 
     with tab1:
@@ -149,14 +149,14 @@ def main():
         plot_price_spreads(zone, start_str, end_str)
 
     with tab7:
-        st.subheader(f"{zone}: Spot price prediction")
-        st.caption("Choose model, click Start train. Trains on first 90%, predicts on last 10% of date range.")
-        plot_prediction(zone, start_str, end_str)
-
-    with tab8:
         st.header("Marginal Pricing Analysis")
         evaluate_renewable_business_case(zone, start_str, end_str)
         st.divider()
+
+    with tab8:
+        st.subheader(f"{zone}: Spot price prediction")
+        st.caption("Choose model, click Start train. Trains on first 90%, predicts on last 10% of date range.")
+        plot_prediction(zone, start_str, end_str)
         
 
 

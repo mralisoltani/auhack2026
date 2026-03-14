@@ -34,7 +34,7 @@ from dashboard.plots import (
     plot_price_spreads,
     plot_prediction,
     plot_data_overview,
-    evaluate_renewable_business_case
+    evaluate_renewable_business_case,
 )
 
 
@@ -91,7 +91,7 @@ def main():
         # Add new country section
         from dashboard.add_zone_ui import render_add_zone_section
         render_add_zone_section()
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "Data Overview",
         "Spot Prices",
         "Supply & Demand",
@@ -99,7 +99,7 @@ def main():
         "Weather",
         "Market Coupling",
         "Prediction",
-        "Marginal Pricing"
+        "Marginal Pricing",
         ])
 
     with tab1:

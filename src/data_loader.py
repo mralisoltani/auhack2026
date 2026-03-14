@@ -48,8 +48,9 @@ def load_generation(zone: str, data_root: Path = DATA_ROOT) -> pd.DataFrame:
 
 
 def load_generation_pivot(zone: str, data_root: Path = DATA_ROOT) -> pd.DataFrame:
-    """Load generation pivoted wide (one column per type)."""
+    """Load generation pivoted wide (one column per type). Aggregates duplicates."""
     df = load_generation(zone, data_root)
+    df = df.groupby(["time", "type"], as_index=False)["value (MW)"].mean()
     wide = df.pivot(index="time", columns="type", values="value (MW)")
     wide.index = pd.to_datetime(wide.index, utc=True)
     return wide.sort_index()

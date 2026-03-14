@@ -2,18 +2,27 @@
 
 Interactive Streamlit dashboard for the AU Hack 2026 energy market analysis.
 
+## Structure
+
+```
+dashboard/
+├── app.py              # Layout and design only
+├── utils.py            # Shared helpers (caching, resampling)
+├── plots/
+│   ├── spot_prices.py      # Spot price plots
+│   ├── supply_demand.py    # Load vs generation
+│   ├── flows.py            # Flows in/out, net import vs price
+│   ├── weather.py          # Temperature/wind vs load/generation
+│   └── market_coupling.py  # Correlation matrix, price spreads
+└── README.md
+```
+
 ## Run
 
 From the project root:
 
 ```bash
 streamlit run dashboard/app.py
-```
-
-Or:
-
-```bash
-cd dashboard && streamlit run app.py
 ```
 
 ## Features

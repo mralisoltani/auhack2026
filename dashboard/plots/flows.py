@@ -73,8 +73,12 @@ def plot_flows_out(zone: str, start: str, end: str) -> None:
 
 def plot_net_import_vs_price(zone: str, start: str, end: str) -> None:
     """Net import vs spot price (normalized scatter)."""
-    pivot = get_flows_pivot_15min(zone)
-    sp = load_spot_price(zone)
+    try:
+        pivot = get_flows_pivot_15min(zone)
+        sp = load_spot_price(zone)
+    except FileNotFoundError:
+        st.warning(f"No flow or spot price data for {zone}.")
+        return
     sp_15 = to_15min(sp)
     net = pivot["net_import"].reindex(sp_15.index).ffill()
     join = sp_15.join(net, how="inner").dropna()

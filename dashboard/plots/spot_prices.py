@@ -2,7 +2,13 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 
-from dashboard.utils import get_prices_15min, naive_index, format_date_axis, tight_layout
+from dashboard.utils import (
+    get_prices_15min,
+    to_15min,
+    naive_index,
+    format_date_axis,
+    tight_layout,
+)
 from src.data_loader import load_spot_price
 
 
@@ -24,9 +30,35 @@ def plot_spot_prices(start: str, end: str) -> None:
     plt.close()
 
 
+def plot_zone_spot_price(zone: str, start: str, end: str) -> None:
+    """Spot price for selected zone over date range."""
+    try:
+        sp = load_spot_price(zone)
+    except FileNotFoundError:
+        st.warning(f"No spot price data for {zone}.")
+        return
+    sp_15 = to_15min(sp)
+    sample = naive_index(sp_15.loc[start:end])
+    if sample.empty:
+        st.warning("No data for selected zone/range.")
+        return
+    fig, ax = plt.subplots(figsize=(12, 4))
+    sample["price"].plot(ax=ax, color="C0", alpha=0.8)
+    ax.set_ylabel("EUR/MWh")
+    ax.set_title(f"{zone}: Spot price")
+    format_date_axis(ax)
+    tight_layout(fig)
+    st.pyplot(fig)
+    plt.close()
+
+
 def plot_price_by_hour(zone: str) -> None:
     """Average spot price by hour (all-time)."""
-    sp = load_spot_price(zone)
+    try:
+        sp = load_spot_price(zone)
+    except FileNotFoundError:
+        st.warning(f"No spot price data for {zone}.")
+        return
     sp_ = sp.copy()
     sp_["hour"] = sp_.index.hour
     by_hour = sp_.groupby("hour")["price"].agg(["mean", "std"])

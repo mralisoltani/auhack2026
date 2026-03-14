@@ -28,14 +28,14 @@ def plot_correlation_matrix() -> None:
     plt.close()
 
 
-def plot_price_spreads(start: str, end: str) -> None:
-    """DE vs neighbor price spreads."""
+def plot_price_spreads(zone: str, start: str, end: str) -> None:
+    """Zone vs neighbor price spreads."""
     prices = get_prices_15min()
-    if "DE" not in prices.columns:
-        st.warning("DE not in price data.")
+    if zone not in prices.columns:
+        st.warning(f"{zone} not in price data.")
         return
-    neighbors = [z for z in prices.columns if z != "DE"]
-    spreads = pd.DataFrame({f"DE-{z}": prices["DE"] - prices[z] for z in neighbors})
+    neighbors = [z for z in prices.columns if z != zone]
+    spreads = pd.DataFrame({f"{zone}-{z}": prices[zone] - prices[z] for z in neighbors})
     sample = spreads.loc[start:end]
     if sample.empty:
         st.warning("No data for selected range.")
@@ -47,7 +47,7 @@ def plot_price_spreads(start: str, end: str) -> None:
     axes[0].axhline(0, color="gray", ls="--")
     axes[0].set_ylim(-80, 80)
     axes[0].set_ylabel("Price spread (EUR/MWh)")
-    axes[0].set_title("DE minus neighbor price")
+    axes[0].set_title(f"{zone} minus neighbor price")
     axes[0].legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=8)
     axes[0].grid(True, alpha=0.3)
     format_date_axis(axes[0])

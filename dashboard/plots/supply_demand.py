@@ -8,8 +8,12 @@ from src.data_loader import load_total_load, load_generation_pivot
 
 def plot_supply_demand(zone: str, start: str, end: str) -> None:
     """Load vs Generation."""
-    load = load_total_load(zone)
-    gen = load_generation_pivot(zone)
+    try:
+        load = load_total_load(zone)
+        gen = load_generation_pivot(zone)
+    except FileNotFoundError:
+        st.warning(f"No load/generation data for {zone}.")
+        return
     gen["total_gen"] = gen.sum(axis=1)
     l_sample = naive_index(load.loc[start:end])
     g_sample = naive_index(gen.loc[start:end])

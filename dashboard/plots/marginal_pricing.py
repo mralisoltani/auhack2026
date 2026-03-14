@@ -44,9 +44,9 @@ def evaluate_renewable_business_case(zone: str, start: str, end: str):
     
     ax.fill_between(df.index, 0, df['price'], 
                     where=(df['price'] > 0),
-                    color='gold', alpha=0.3, label="Inframarginal Rent (Profit)")
+                    alpha=0.3, label="Inframarginal Rent (Profit)")
     
-    ax.plot(df.index, df['price'], color='orange', lw=1.5, label="Market Clearing Price")
+    ax.plot(df.index, df['price'], lw=1.5, label="Market Clearing Price")
     ax.set_ylabel("Euro / MWh")
     ax.set_title(f"The Marginal Pricing 'Profit Gap' in {zone}")
     ax.legend()

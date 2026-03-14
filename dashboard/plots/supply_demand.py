@@ -8,7 +8,7 @@ from src.data_loader import load_total_load, load_generation_pivot, load_spot_pr
 
 
 def plot_renewable_penetration(zone: str, start: str, end: str) -> None:
-    """Renewable Penetration (Wind + Solar / Load)."""
+    """Renewable Penetration (Wind + Solar / Total Generation)."""
     load = load_total_load(zone)
     gen = load_generation_pivot(zone)
 
@@ -17,10 +17,10 @@ def plot_renewable_penetration(zone: str, start: str, end: str) -> None:
     solar_cols = [c for c in gen.columns if "SOLAR" in c]
     renewable_cols = [c for c in gen.columns if "RENEWABLE" in c]
     gen["renewables"] = gen[wind_cols].sum(axis=1) + gen[solar_cols].sum(axis=1) + gen[renewable_cols].sum(axis=1)
-
+    total_gen = gen.sum(axis=1)
     # Combine load and generation for alignment and calculate penetration percentage
     combined = load.join(gen[['renewables']], how='inner').dropna()
-    combined['penetration'] = (combined['renewables'] / combined['load']) * 100
+    combined['penetration'] = (combined['renewables'] / total_gen) * 100
 
     sample = naive_index(combined.loc[start:end])
     if sample.empty:
@@ -28,9 +28,9 @@ def plot_renewable_penetration(zone: str, start: str, end: str) -> None:
         return
         
     fig, ax = plt.subplots(figsize=(12, 4))
-    sample["penetration"].plot(ax=ax, label="Renewable Penetration", color="C3")
+    sample["penetration"].plot(ax=ax, label="Renewable Share", color="C3")
     ax.set_ylabel("Penetration (%)")
-    ax.set_title(f"{zone}: Renewable Penetration (Wind + Solar / Load)")
+    ax.set_title(f"{zone}: Renewable Share (Wind + Solar / Total Generation)")
     ax.legend()
     format_date_axis(ax)
     tight_layout(fig)
@@ -41,7 +41,6 @@ def plot_renewable_penetration(zone: str, start: str, end: str) -> None:
 def plot_penetration_vs_price(zone: str, start: str, end: str) -> None:
     """Renewable penetration vs spot price (scatter)."""
     try:
-        load = load_total_load(zone)
         gen = load_generation_pivot(zone)
         sp = load_spot_price(zone)
         
@@ -49,14 +48,14 @@ def plot_penetration_vs_price(zone: str, start: str, end: str) -> None:
         wind_cols = [c for c in gen.columns if "WIND" in c]
         solar_cols = [c for c in gen.columns if "SOLAR" in c]
         renewable_cols = [c for c in gen.columns if "RENEWABLE" in c]
-        gen["renewables"] = gen[wind_cols].sum(axis=1) + gen[solar_cols].sum(axis=1) + gen[renewable_cols].sum(axis=1)
         
-        combined = load.join(gen[['renewables']], how='inner').dropna()
-        combined['penetration'] = (combined['renewables'] / combined['load']) * 100
+        total_gen = gen.sum(axis=1)
+        renewables = gen[wind_cols].sum(axis=1) + gen[solar_cols].sum(axis=1) + gen[renewable_cols].sum(axis=1)
+        gen['penetration'] = (renewables / total_gen) * 100
         
         # Align 15-minute generation data with hourly/spot prices
         sp_15 = to_15min(sp)
-        join = combined[['penetration']].join(sp_15, how="inner").dropna()
+        join = gen[['penetration']].join(sp_15, how="inner").dropna()
         join = join.loc[start:end]
         
         if join.empty or len(join) < 10:
@@ -70,7 +69,7 @@ def plot_penetration_vs_price(zone: str, start: str, end: str) -> None:
         ax.scatter(join["penetration"], join["price"], alpha=0.3, s=5)
         ax.set_xlabel("Renewable Penetration (%)")
         ax.set_ylabel("Spot Price (EUR/MWh)")
-        ax.set_title(f"{zone}: Renewable Penetration vs Spot Price")
+        ax.set_title(f"{zone}: Renewable Share vs Spot Price")
         tight_layout(fig)
         st.pyplot(fig)
         plt.close()
@@ -89,9 +88,9 @@ def plot_fossil_ratio_vs_price(zone: str, start: str, end: str) -> None:
         fossil_keywords = ["COAL", "LIGNITE", "GAS", "OIL", "FOSSIL"]
         fossil_cols = [c for c in gen.columns if any(k in str(c).upper() for k in fossil_keywords)]
         gen["fossil_total"] = gen[fossil_cols].sum(axis=1)
-        
+        total_gen = gen.sum(axis=1)
         combined = load.join(gen[['fossil_total']], how='inner').dropna()
-        combined['fossil_ratio'] = (combined['fossil_total'] / combined['load']) * 100
+        combined['fossil_ratio'] = (combined['fossil_total'] / total_gen) * 100
         
         # Align 15-minute generation data with hourly/spot prices
         sp_15 = to_15min(sp)
@@ -169,11 +168,10 @@ def plot_residual_load(zone: str, start: str, end: str) -> None:
 
 def plot_generation_mix(zone: str, start: str, end: str) -> None:
     """Stacked area chart of generation mix."""
-    gen = load_generation_pivot(zone)
-    load = load_total_load(zone)
+    gen = load_generation_pivot(zone)   
     
     sample = naive_index(gen.loc[start:end])
-    l_sample = naive_index(load.loc[start:end])
+  
     
     if sample.empty:
         st.warning("No data for selected zone/range.")
@@ -185,11 +183,11 @@ def plot_generation_mix(zone: str, start: str, end: str) -> None:
     # Order columns by marginal cost (cheapest to most expensive)
     def get_sort_key(label):
         lbl = str(label).upper()
-        if any(x in lbl for x in ["WIND", "SOLAR", "HYDRO-ROR", "RENEWABLE"]): return 1
-        if any(x in lbl for x in ["NUCLEAR", "BIOMASS", "WASTE"]): return 2
+        if any(x in lbl for x in ["WIND", "SOLAR", "HYDRO", "RENEWABLE"]): return 1
+        if any(x in lbl for x in ["NUCLEAR", "BIOMASS", "WASTE", "GEOTHERMAL", "OTHER"]): return 2
         if any(x in lbl for x in ["LIGNITE", "COAL", "IGNITE"]): return 3
-        if any(x in lbl for x in ["GAS", "OIL", "FOSSIL"]): return 4
-        return 5
+        if any(x in lbl for x in ["GAS", "OIL", "FOSSIL"]): return 5
+        return 4
 
     sorted_cols = sorted(sample.columns, key=get_sort_key)
     sample = sample[sorted_cols]
@@ -223,13 +221,22 @@ def plot_generation_mix(zone: str, start: str, end: str) -> None:
     fig, ax = plt.subplots(figsize=(12, 6))      
     sample.plot.area(ax=ax, stacked=True, alpha=0.8, color=colors)
     
-    # Plot Total Load as a dotted line
-    if not l_sample.empty:
-        l_sample["load"].plot(ax=ax, color="black", linestyle=":", linewidth=2, label="Total Load")
-        
+   
     ax.set_ylabel("Generation (MW)")    
-    ax.set_title(f"{zone}: Generation Mix")
+    ax.set_title(f"{zone}: Energy Generation Distribution")
     ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=8)
+ 
+    # 2. Reverse Legend to match Stack
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles[::-1], labels[::-1], bbox_to_anchor=(1.02, 1), loc="upper left")
+
+    # 3. Add a "Zero Line" emphasis
+    ax.axhline(0, color='black', linewidth=0.8)
+
+    # 4. Use a more professional font and grid
+    ax.grid(True, which='major', linestyle='--', alpha=0.4)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
     format_date_axis(ax)
     tight_layout(fig)
     st.pyplot(fig)

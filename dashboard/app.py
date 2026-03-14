@@ -109,7 +109,7 @@ def main():
         st.subheader("Price by hour (all-time)")
         plot_price_by_hour(zone)
 
-    with tab2:        
+    with tab3:        
         st.subheader("Energy Generation Distribution")
         plot_generation_mix(zone, start_str, end_str)
         st.subheader("Energy Load vs Generation")

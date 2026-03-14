@@ -26,7 +26,7 @@ def plot_weather_load(zone: str, start: str, end: str) -> None:
         tight_layout(fig)
         st.pyplot(fig)
         plt.close()
-    except FileNotFoundError:
+    except (FileNotFoundError, KeyError):
         st.warning(f"No weather data for {zone}.")
 
 
@@ -52,5 +52,5 @@ def plot_wind_generation(zone: str, start: str, end: str) -> None:
         tight_layout(fig)
         st.pyplot(fig)
         plt.close()
-    except FileNotFoundError:
+    except (FileNotFoundError, KeyError):
         st.warning(f"No weather data for {zone}.")

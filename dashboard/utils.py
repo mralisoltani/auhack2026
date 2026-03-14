@@ -55,8 +55,8 @@ def naive_index(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @st.cache_data
-def get_flows_pivot_15min(zone: str) -> pd.DataFrame:
-    """Load flows into zone, pivot, resample to 15-min."""
+def get_flows_pivot_15min(zone: str, _zone_list: tuple[str, ...] = ()) -> pd.DataFrame:
+    """Load flows into zone, pivot, resample to 15-min. _zone_list invalidates cache when zones change."""
     flows = load_flows_into(zone)
     pivot = flows.pivot(index="time", columns="zone", values="value (MW)")
     pivot.index = pd.to_datetime(pivot.index, utc=True)
@@ -67,9 +67,9 @@ def get_flows_pivot_15min(zone: str) -> pd.DataFrame:
 
 
 @st.cache_data
-def get_prices_15min() -> pd.DataFrame:
-    """Load all spot prices at 15-min."""
-    prices = load_all_spot_prices()
+def get_prices_15min(_zone_list: tuple[str, ...]) -> pd.DataFrame:
+    """Load all spot prices at 15-min. _zone_list is for cache invalidation when zones change."""
+    prices = load_all_spot_prices(list(_zone_list))
     if isinstance(prices.columns, pd.MultiIndex):
         prices.columns = prices.columns.get_level_values(0)
     full_idx = pd.date_range(prices.index.min(), prices.index.max(), freq="15min", tz="UTC")

@@ -4,11 +4,12 @@ import streamlit as st
 import matplotlib.pyplot as plt
 
 from dashboard.utils import get_prices_15min, naive_index, format_date_axis, tight_layout
+from src.zone_registry import get_spot_zones
 
 
 def plot_correlation_matrix() -> None:
     """Spot price correlation matrix across zones."""
-    prices = get_prices_15min()
+    prices = get_prices_15min(tuple(get_spot_zones()))
     corr = prices.corr()
     fig, ax = plt.subplots(figsize=(8, 6))
     im = ax.imshow(corr, cmap="RdBu_r", vmin=-1, vmax=1)
@@ -28,14 +29,14 @@ def plot_correlation_matrix() -> None:
     plt.close()
 
 
-def plot_price_spreads(start: str, end: str) -> None:
-    """DE vs neighbor price spreads."""
-    prices = get_prices_15min()
-    if "DE" not in prices.columns:
-        st.warning("DE not in price data.")
+def plot_price_spreads(zone: str, start: str, end: str) -> None:
+    """Zone vs neighbor price spreads."""
+    prices = get_prices_15min(tuple(get_spot_zones()))
+    if zone not in prices.columns:
+        st.warning(f"{zone} not in price data.")
         return
-    neighbors = [z for z in prices.columns if z != "DE"]
-    spreads = pd.DataFrame({f"DE-{z}": prices["DE"] - prices[z] for z in neighbors})
+    neighbors = [z for z in prices.columns if z != zone]
+    spreads = pd.DataFrame({f"{zone}-{z}": prices[zone] - prices[z] for z in neighbors})
     sample = spreads.loc[start:end]
     if sample.empty:
         st.warning("No data for selected range.")
@@ -45,9 +46,9 @@ def plot_price_spreads(start: str, end: str) -> None:
     for col in sample_naive.columns:
         axes[0].plot(sample_naive.index, sample_naive[col], label=col, alpha=0.9, linewidth=1)
     axes[0].axhline(0, color="gray", ls="--")
-    axes[0].set_ylim(-80, 80)
+    # axes[0].set_ylim(-80, 80)
     axes[0].set_ylabel("Price spread (EUR/MWh)")
-    axes[0].set_title("DE minus neighbor price")
+    axes[0].set_title(f"{zone} minus neighbor price")
     axes[0].legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=8)
     axes[0].grid(True, alpha=0.3)
     format_date_axis(axes[0])

@@ -8,15 +8,17 @@ from typing import Optional
 import glob
 import pandas as pd
 
+from src.zone_registry import get_spot_zones, get_flow_zones
+
 # Default paths - override for different environments
 DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
 # Zone mapping for weather only (DK1/DK2 share DK weather file)
 ZONE_TO_WEATHER = {"DK1": "DK", "DK2": "DK"}
 
-# All zones in the dataset
-SPOT_ZONES = ["AT", "BE", "CH", "CZ", "DE", "DK1", "FR", "NL", "PL"]
-FLOW_ZONES = ["AT", "BE", "CH", "CZ", "DE", "DK1", "DK2", "FR", "NL", "NO2", "PL", "SE4"]
+# All zones (dynamic: built-in + disk + custom)
+SPOT_ZONES = get_spot_zones()
+FLOW_ZONES = get_flow_zones()
 
 
 def load_spot_price(zone: str, data_root: Path = DATA_ROOT) -> pd.DataFrame:
@@ -66,12 +68,15 @@ def load_flows_into(zone: str, data_root: Path = DATA_ROOT) -> pd.DataFrame:
 
 def load_flows_out_of(zone: str, data_root: Path = DATA_ROOT) -> pd.DataFrame:
     """Load flows out of a zone (from other zones' 'flows-in' files)."""
-    # Flows out of DE appear in AT, BE, CH, etc. as DE->AT, DE->BE, ...
+    flow_zones = get_flow_zones()
     all_flows = []
-    for other in FLOW_ZONES:
+    for other in flow_zones:
         if other == zone:
             continue
-        df = load_flows_into(other, data_root)
+        try:
+            df = load_flows_into(other, data_root)
+        except FileNotFoundError:
+            continue
         out = df[df["zone"].str.startswith(f"{zone}->")]
         if not out.empty:
             out = out.copy()
@@ -90,10 +95,16 @@ def _weather_zone(zone: str) -> str:
 def load_weather(zone: str, data_root: Path = DATA_ROOT) -> pd.DataFrame:
     """Load weather for a zone. Skips Open-Meteo metadata header."""
     wzone = _weather_zone(zone)
-    pattern = str(data_root / "weather" / f"{wzone}-open-meteo-*.csv")
+    folder = data_root / "weather"
+    # Match both {zone}-open-meteo.csv and {zone}-open-meteo-*.csv
+    pattern = str(folder / f"{wzone}-open-meteo*.csv")
     matches = glob.glob(pattern)
     if not matches:
-        raise FileNotFoundError(f"No weather file for zone {zone} (looked for {wzone})")
+        direct = folder / f"{wzone}-open-meteo.csv"
+        if direct.exists():
+            matches = [str(direct)]
+    if not matches:
+        raise FileNotFoundError(f"No weather file for zone {zone} (looked for {wzone}-open-meteo*.csv)")
     df = pd.read_csv(matches[0], skiprows=3)
     df["time"] = pd.to_datetime(df["time"], utc=True)
     df = df.rename(columns={
@@ -112,7 +123,7 @@ def load_weather(zone: str, data_root: Path = DATA_ROOT) -> pd.DataFrame:
 
 def load_all_spot_prices(zones: Optional[list] = None, data_root: Path = DATA_ROOT) -> pd.DataFrame:
     """Load spot prices for all zones, wide format."""
-    zones = zones or SPOT_ZONES
+    zones = zones or get_spot_zones()
     dfs = []
     for z in zones:
         try:
@@ -128,7 +139,7 @@ def load_all_spot_prices(zones: Optional[list] = None, data_root: Path = DATA_RO
 
 def load_all_weather(zones: Optional[list] = None, data_root: Path = DATA_ROOT) -> dict[str, pd.DataFrame]:
     """Load weather for all zones. Returns dict zone -> DataFrame."""
-    zones = zones or SPOT_ZONES
+    zones = zones or get_spot_zones()
     result = {}
     for z in zones:
         try:

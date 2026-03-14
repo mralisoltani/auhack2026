@@ -62,17 +62,17 @@ def main():
         plot_price_by_hour(zone)
 
     with tab2:        
-        st.subheader("Generation Mix")
+        st.subheader("Energy Generation Distribution")
         plot_generation_mix(zone, start_str, end_str)
-        st.subheader("Load vs Generation")
+        st.subheader("Energy Load vs Generation")
         plot_supply_demand(zone, start_str, end_str)
         st.subheader("Residual Load")
         plot_residual_load(zone, start_str, end_str)
-        st.subheader("Renewable Penetration")
+        st.subheader("Renewable Share")
         plot_renewable_penetration(zone, start_str, end_str)
-        st.subheader("Penetration vs Price")
+        st.subheader("Renewable Share vs Price")
         plot_penetration_vs_price(zone, start_str, end_str)
-        st.subheader("Fossil Ratio vs Price")
+        st.subheader("Fossil Share vs Price")
         plot_fossil_ratio_vs_price(zone, start_str, end_str)
 
     with tab3:

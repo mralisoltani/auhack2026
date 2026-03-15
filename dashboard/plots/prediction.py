@@ -15,6 +15,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 from dashboard.utils import to_15min, naive_index, format_date_axis, tight_layout
+from dashboard import ml_client
 from src.data_loader import (
     load_spot_price,
     load_total_load,
@@ -450,6 +451,20 @@ def plot_prediction(zone: str, start: str, end: str) -> None:
         st.warning("Could not load features for this zone. Check data availability.")
         return
 
+    # Mode: Local (in-process) or API (ML API service)
+    pred_mode = st.radio(
+        "Prediction mode",
+        options=["Local", "API (ML API)"],
+        index=0,
+        key="pred_mode",
+        horizontal=True,
+        help="Local: train and predict in-process. API: use Docker ML service (requires ML API running).",
+    )
+    use_api = pred_mode == "API (ML API)"
+    if use_api and not ml_client.is_available():
+        st.warning("ML API is not available. Start the ML service (e.g. `docker compose up ml-api`) or use Local mode.")
+        use_api = False
+
     with st.expander("Select features for training", expanded=True):
         selected_features = st.multiselect(
             "Features",
@@ -518,13 +533,29 @@ def plot_prediction(zone: str, start: str, end: str) -> None:
             X_val = X_val[feat_ok]
             X_test = X_test[feat_ok]
 
-            y_pred_test, metrics, predict_fn = _train_and_predict(
-                model_type, X_train, y_train, X_val, y_val, X_test, y_test, seeds
-            )
-
-            if y_pred_test is None:
-                st.error(f"Model '{model_type}' not available. Install xgboost, lightgbm, catboost.")
-                return
+            if use_api:
+                model_id, metrics, feat_cols_resp = ml_client.train_model(
+                    zone, model_type, feat_ok, n_seeds,
+                    X_train, y_train, X_val, y_val, X_test, y_test,
+                )
+                if model_id is None:
+                    st.error("API training failed. Check ML service logs or use Local mode.")
+                    return
+                y_pred_test = np.array(ml_client.predict(model_id, X_test, feat_cols_resp))
+                if y_pred_test is None:
+                    st.error("Failed to get predictions from API.")
+                    return
+                def _api_predict_fn(X, mid=model_id, fc=feat_cols_resp):
+                    p = ml_client.predict(mid, X, fc)
+                    return np.array(p) if p is not None else None
+                predict_fn = _api_predict_fn
+            else:
+                y_pred_test, metrics, predict_fn = _train_and_predict(
+                    model_type, X_train, y_train, X_val, y_val, X_test, y_test, seeds
+                )
+                if y_pred_test is None:
+                    st.error(f"Model '{model_type}' not available. Install xgboost, lightgbm, catboost.")
+                    return
 
             test_start = y_test.index[0]
             test_end = y_test.index[-1]
@@ -546,12 +577,14 @@ def plot_prediction(zone: str, start: str, end: str) -> None:
                 "feat_cols": feat_ok,
                 "X_full": X_clean,
                 "y_full": y_clean,
+                "use_api": use_api,
             }
         st.rerun()
 
     res = st.session_state.get("prediction_result")
     selected_tuple = tuple(sorted(selected_features))
-    if res is None or res["zone"] != zone or res["start"] != start or res["end"] != end or res["model_type"] != model_type or res.get("n_seeds") != n_seeds or res.get("selected_features") != selected_tuple:
+    res_use_api = res.get("use_api", False) if res else False
+    if res is None or res["zone"] != zone or res["start"] != start or res["end"] != end or res["model_type"] != model_type or res.get("n_seeds") != n_seeds or res.get("selected_features") != selected_tuple or res_use_api != use_api:
         st.caption("Select model and click **Start train** to train on the first 90% of the date range and predict on the last 10%.")
         return
 
@@ -578,7 +611,8 @@ def plot_prediction(zone: str, start: str, end: str) -> None:
 
     # Feature importance (if available)
     if feat_imp is not None and len(feat_imp) > 0:
-        imp = feat_imp.sort_values(ascending=False)
+        imp = pd.Series(feat_imp) if isinstance(feat_imp, dict) else feat_imp
+        imp = imp.sort_values(ascending=False)
         fig_imp, ax_imp = plt.subplots(figsize=(8, 4))
         imp.head(12).plot(kind="barh", ax=ax_imp, color="steelblue", alpha=0.8)
         ax_imp.set_xlabel("Importance")
@@ -603,15 +637,16 @@ def plot_prediction(zone: str, start: str, end: str) -> None:
     # Live prediction controls (only when model supports it)
     live_controls = predict_fn is not None and feat_cols is not None and X_full is not None and y_full is not None
     if live_controls:
+        live_opts = ["Inference only", "With retraining"] if not use_api else ["Inference only"]
         live_mode = st.radio(
             "Live prediction mode",
-            options=["Inference only", "With retraining"],
+            options=live_opts,
             index=0,
             key="live_mode",
             horizontal=True,
-            help="Inference only: use the trained model as-is. With retraining: retrain on expanding data before each prediction.",
+            help="Inference only: use the trained model as-is. With retraining: retrain on expanding data (Local mode only).",
         )
-        use_retraining = live_mode == "With retraining"
+        use_retraining = live_mode == "With retraining" and not use_api
         points_per_update = st.number_input(
             "Points per update",
             min_value=1,

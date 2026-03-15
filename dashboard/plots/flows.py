@@ -109,10 +109,10 @@ def plot_net_import_vs_price(zone: str, start: str, end: str) -> None:
 def plot_net_import_vs_price_2(zone: str, start: str, end: str) -> None:
     """Action-oriented dashboard for energy traders."""
     try:
-        pivot = get_flows_pivot_15min(zone)
+        pivot = get_flows_pivot_15min(zone, tuple(get_flow_zones()))
         sp = load_spot_price(zone)
     except FileNotFoundError:
-        st.warning(f"No data for {zone}.")
+        st.warning(f"No flow or spot price data for {zone}.")
         return
     join = to_15min(sp).join(pivot["net_import"], how="inner").dropna().loc[start:end]
     net_z = (join["net_import"] - join["net_import"].mean()) / join["net_import"].std()

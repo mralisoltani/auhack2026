@@ -1,0 +1,22 @@
+services:
+  ml-api:
+    build: ./ml_service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+    environment:
+      - MODEL_DIR=/app/models
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - ML_API_URL=http://ml-api:8000
+    depends_on:
+      - ml-api

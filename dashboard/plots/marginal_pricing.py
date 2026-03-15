@@ -9,7 +9,7 @@ def evaluate_renewable_business_case(zone: str, start: str, end: str):
         gen_pivot = load_generation_pivot(zone)
         price_df = load_spot_price(zone)
     except FileNotFoundError:
-        st.error(f"Missing data for {zone}")
+        st.warning(f"No generation or spot price data for {zone}.")
         return
 
     df = gen_pivot.join(price_df, how="inner").loc[start:end]

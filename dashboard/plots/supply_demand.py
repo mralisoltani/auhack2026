@@ -9,8 +9,12 @@ from src.data_loader import load_total_load, load_generation_pivot, load_spot_pr
 
 def plot_renewable_penetration(zone: str, start: str, end: str) -> None:
     """Renewable Penetration (Wind + Solar / Total Generation)."""
-    load = load_total_load(zone)
-    gen = load_generation_pivot(zone)
+    try:
+        load = load_total_load(zone)
+        gen = load_generation_pivot(zone)
+    except FileNotFoundError:
+        st.warning(f"No load/generation data for {zone}.")
+        return
 
     # Identify wind and solar columns
     wind_cols = [c for c in gen.columns if "WIND" in c]
@@ -143,8 +147,12 @@ def plot_supply_demand(zone: str, start: str, end: str) -> None:
 
 def plot_residual_load(zone: str, start: str, end: str) -> None:
     """Load vs Generation and Residual Load."""
-    load = load_total_load(zone)
-    gen = load_generation_pivot(zone)
+    try:
+        load = load_total_load(zone)
+        gen = load_generation_pivot(zone)
+    except FileNotFoundError:
+        st.warning(f"No load/generation data for {zone}.")
+        return
     gen["total_gen"] = gen.sum(axis=1)
     l_sample = naive_index(load.loc[start:end])
     g_sample = naive_index(gen.loc[start:end])
@@ -172,7 +180,11 @@ def plot_residual_load(zone: str, start: str, end: str) -> None:
 
 def plot_generation_mix(zone: str, start: str, end: str) -> None:
     """Stacked area chart of generation mix."""
-    gen = load_generation_pivot(zone)   
+    try:
+        gen = load_generation_pivot(zone)
+    except FileNotFoundError:
+        st.warning(f"No generation data for {zone}.")
+        return   
     
     sample = naive_index(gen.loc[start:end])
   

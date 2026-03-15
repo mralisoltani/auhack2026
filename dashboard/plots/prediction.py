@@ -549,3 +549,73 @@ def plot_prediction(zone: str, start: str, end: str) -> None:
         if st.session_state["live_prediction_active"]:
             time.sleep(update_interval)
             st.rerun()
+
+
+def plot_feature_importance_comparison() -> None:
+    """Compare feature importance across multiple zones using RandomForest."""
+    from sklearn.ensemble import RandomForestRegressor
+
+    zones = get_spot_zones()
+    if len(zones) < 2:
+        st.info("Need at least 2 zones for comparison.")
+        return
+
+    selected = st.multiselect(
+        "Zones to compare",
+        zones,
+        default=zones[:min(4, len(zones))],
+        key="feat_compare_zones",
+    )
+    if len(selected) < 2:
+        st.warning("Select at least 2 zones.")
+        return
+
+    if st.button("Run feature importance comparison", key="feat_compare_btn"):
+        all_importances = {}
+        progress = st.progress(0)
+        for i, z in enumerate(selected):
+            progress.progress((i) / len(selected), text=f"Training {z}...")
+            features = build_features(z)
+            if features is None or features.empty:
+                continue
+            try:
+                sp = load_spot_price(z)
+            except FileNotFoundError:
+                continue
+            y = to_15min(sp)["price"].reindex(features.index).ffill()
+            valid = features.notna().all(axis=1) & y.notna()
+            X = features[valid].dropna()
+            y_clean = y[valid].loc[X.index].squeeze()
+            if len(X) < 100:
+                continue
+            rf = RandomForestRegressor(n_estimators=50, max_depth=8, random_state=42, n_jobs=-1)
+            rf.fit(X, y_clean)
+            imp = pd.Series(rf.feature_importances_, index=X.columns)
+            all_importances[z] = imp
+        progress.progress(1.0, text="Done!")
+
+        if not all_importances:
+            st.warning("Could not train on any zone.")
+            return
+
+        imp_df = pd.DataFrame(all_importances).fillna(0)
+        top_features = imp_df.mean(axis=1).nlargest(12).index
+        imp_top = imp_df.loc[top_features].T
+
+        st.session_state["feat_compare_result"] = imp_top
+        st.rerun()
+
+    result = st.session_state.get("feat_compare_result")
+    if result is not None:
+        imp_top = result
+        fig, ax = plt.subplots(figsize=(14, 6))
+        imp_top.plot(kind="bar", ax=ax, alpha=0.8)
+        ax.set_ylabel("Feature importance")
+        ax.set_title("Feature importance comparison across zones (RandomForest)")
+        ax.legend(title="Feature", bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=7)
+        ax.grid(True, alpha=0.3, axis="y")
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+        tight_layout(fig)
+        st.pyplot(fig)
+        plt.close()
+        st.caption("Shows which features matter most for each zone. E.g., wind dominates in DK1 while temperature matters more in FR.")

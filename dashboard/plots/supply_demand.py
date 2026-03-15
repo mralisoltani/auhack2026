@@ -1,5 +1,7 @@
 """Supply & demand plots — Notebook 02."""
 import random
+import numpy as np
+import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 
@@ -42,7 +44,7 @@ def plot_renewable_penetration(zone: str, start: str, end: str) -> None:
     plt.close()
 
 
-def plot_penetration_vs_price(zone: str, start: str, end: str) -> None:
+def plot_penetration_vs_price(zone: str, start: str, end: str, figsize: tuple = (8, 5)) -> None:
     """Renewable penetration vs spot price (scatter)."""
     try:
         gen = load_generation_pivot(zone)
@@ -69,7 +71,7 @@ def plot_penetration_vs_price(zone: str, start: str, end: str) -> None:
         corr = join["penetration"].corr(join["price"])
         st.metric("Correlation: penetration vs spot price", f"{corr:.3f}")
         
-        fig, ax = plt.subplots(figsize=(8, 5))
+        fig, ax = plt.subplots(figsize=figsize)
         ax.scatter(join["penetration"], join["price"], alpha=0.3, s=5)
         ax.set_xlabel("Renewable Penetration (%)")
         ax.set_ylabel("Spot Price (EUR/MWh)")
@@ -81,7 +83,7 @@ def plot_penetration_vs_price(zone: str, start: str, end: str) -> None:
         st.warning(f"Could not plot penetration vs price: {e}")
 
 
-def plot_fossil_ratio_vs_price(zone: str, start: str, end: str) -> None:
+def plot_fossil_ratio_vs_price(zone: str, start: str, end: str, figsize: tuple = (8, 5)) -> None:
     """Fossil fuel ratio vs spot price (scatter)."""
     try:
         load = load_total_load(zone)
@@ -108,7 +110,7 @@ def plot_fossil_ratio_vs_price(zone: str, start: str, end: str) -> None:
         corr = join["fossil_ratio"].corr(join["price"])
         st.metric("Correlation: fossil ratio vs spot price", f"{corr:.3f}")
         
-        fig, ax = plt.subplots(figsize=(8, 5))
+        fig, ax = plt.subplots(figsize=figsize)
         ax.scatter(join["fossil_ratio"], join["price"], alpha=0.3, s=5, color="#8c564b")
         ax.set_xlabel("Fossil Fuel Ratio (%)")
         ax.set_ylabel("Spot Price (EUR/MWh)")
@@ -257,3 +259,84 @@ def plot_generation_mix(zone: str, start: str, end: str) -> None:
     tight_layout(fig)
     st.pyplot(fig)
     plt.close()
+
+
+def plot_duck_curve(zone: str, start: str, end: str) -> None:
+    """Solar duck curve: intraday residual load shape on high-solar vs low-solar days."""
+    try:
+        load_df = load_total_load(zone)
+        gen = load_generation_pivot(zone)
+    except FileNotFoundError:
+        st.warning(f"No load/generation data for {zone}.")
+        return
+
+    solar_cols = [c for c in gen.columns if "SOLAR" in c]
+    if not solar_cols:
+        st.info(f"No solar generation data for {zone}. Duck curve requires solar.")
+        return
+
+    gen["solar_total"] = gen[solar_cols].sum(axis=1)
+    gen["total_gen"] = gen.sum(axis=1)
+    combined = load_df.join(gen[["solar_total", "total_gen"]], how="inner").dropna()
+    combined["residual_load"] = combined["load"] - combined["total_gen"]
+    sample = combined.loc[start:end]
+    if sample.empty or len(sample) < 96:
+        st.warning("Need at least 1 day of data for duck curve analysis.")
+        return
+
+    # Daily solar production
+    sample["date"] = sample.index.date
+    sample["hour"] = sample.index.hour + sample.index.minute / 60
+    daily_solar = sample.groupby("date")["solar_total"].sum()
+
+    # Split into high vs low solar days (above/below median)
+    median_solar = daily_solar.median()
+    high_solar_days = set(daily_solar[daily_solar >= daily_solar.quantile(0.75)].index)
+    low_solar_days = set(daily_solar[daily_solar <= daily_solar.quantile(0.25)].index)
+
+    high = sample[sample["date"].isin(high_solar_days)]
+    low = sample[sample["date"].isin(low_solar_days)]
+
+    if high.empty or low.empty:
+        st.warning("Not enough variation in solar production for duck curve.")
+        return
+
+    high_profile = high.groupby("hour")["residual_load"].mean()
+    low_profile = low.groupby("hour")["residual_load"].mean()
+    high_load = high.groupby("hour")["load"].mean()
+    low_load = low.groupby("hour")["load"].mean()
+
+    c1, c2 = st.columns(2)
+    with c1:
+        belly_depth = high_profile.min() - low_profile.min()
+        st.metric("Duck belly depth", f"{belly_depth:.0f} MW")
+    with c2:
+        ramp = high_profile.iloc[-1] - high_profile.min() if len(high_profile) > 1 else 0
+        st.metric("Evening ramp (high solar)", f"{ramp:.0f} MW")
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    axes[0].plot(high_profile.index, high_profile.values, color="#ff7f0e", lw=2.5, label="High solar days (Q4)")
+    axes[0].plot(low_profile.index, low_profile.values, color="#1f77b4", lw=2.5, label="Low solar days (Q1)")
+    axes[0].fill_between(high_profile.index, high_profile.values, low_profile.values, alpha=0.15, color="orange")
+    axes[0].axhline(0, color="gray", ls="--", lw=0.8)
+    axes[0].set_xlabel("Hour of day (UTC)")
+    axes[0].set_ylabel("Residual load (MW)")
+    axes[0].set_title(f"{zone}: Duck curve — Residual load by hour")
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    axes[1].plot(high_load.index, high_load.values, color="#ff7f0e", lw=2, ls="--", label="Load (high solar)")
+    axes[1].plot(low_load.index, low_load.values, color="#1f77b4", lw=2, ls="--", label="Load (low solar)")
+    high_solar_profile = high.groupby("hour")["solar_total"].mean()
+    axes[1].fill_between(high_solar_profile.index, 0, high_solar_profile.values, alpha=0.3, color="#eeff5a", label="Solar gen (high days)")
+    axes[1].set_xlabel("Hour of day (UTC)")
+    axes[1].set_ylabel("MW")
+    axes[1].set_title(f"{zone}: Load profile & solar generation")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    tight_layout(fig)
+    st.pyplot(fig)
+    plt.close()
+    st.caption("The 'duck curve' shows how solar production creates a midday dip in residual load, followed by a steep evening ramp when solar drops off.")

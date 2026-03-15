@@ -18,21 +18,32 @@ from dashboard.plots import (
     plot_spot_prices,
     plot_zone_spot_price,
     plot_price_by_hour,
+    plot_negative_prices,
+    plot_price_volatility,
+    plot_peak_offpeak,
     plot_renewable_penetration,
     plot_supply_demand,
     plot_residual_load,
     plot_generation_mix,
     plot_penetration_vs_price,
     plot_fossil_ratio_vs_price,
+    plot_duck_curve,
     plot_flows_in,
     plot_flows_out,
     plot_net_import_vs_price,
     plot_net_import_vs_price_2,
+    plot_congestion,
+    plot_flow_drivers,
     plot_weather_load,
     plot_wind_generation,
+    plot_cloud_solar,
+    plot_weather_price_impact,
     plot_correlation_matrix,
     plot_price_spreads,
+    plot_coupling_events,
+    plot_arbitrage,
     plot_prediction,
+    plot_feature_importance_comparison,
     plot_data_overview,
     evaluate_renewable_business_case,
 )
@@ -49,6 +60,13 @@ def main():
     st.caption("AU Hack 2026 — InCommodities case - JAKA Team")
 
     with st.sidebar:
+        st.markdown(
+            "<style>[data-testid='stSidebar'] { padding-top: 0 !important; }</style>",
+            unsafe_allow_html=True,
+        )
+        sidebar_logo_path = Path(__file__).resolve().parent / "assets" / "small_logo.png"
+        if sidebar_logo_path.exists():
+            st.image(str(sidebar_logo_path), use_container_width=True)
         st.caption("Please start by choosing the region")
 
         # Zones from disk + custom (dynamic) — union so new zones appear with any data
@@ -111,49 +129,97 @@ def main():
 
     with tab2:
         st.subheader("Spot prices across zones")
+        st.caption("Compare day-ahead electricity prices across European bidding zones. Price convergence signals market coupling; divergence signals congestion.")
         plot_spot_prices(start_str, end_str)
         st.subheader(f"{zone} spot price (selected range)")
+        st.caption("Time series of the day-ahead spot price for the selected zone. Spikes often correlate with low renewable output or high demand.")
         plot_zone_spot_price(zone, start_str, end_str)
         st.subheader("Price by hour (all-time)")
+        st.caption("Average price profile by hour of day. Peak hours (morning and evening) typically show higher prices due to demand patterns.")
         plot_price_by_hour(zone)
+        st.subheader("Negative price analysis")
+        st.caption("When renewable supply exceeds demand, prices can go negative. This shows how often, how long, and under what conditions (high wind, low load) that happens.")
+        plot_negative_prices(zone, start_str, end_str)
+        st.subheader("Price volatility & regime analysis")
+        st.caption("Rolling standard deviation of price (24h and 7d windows). Red-shaded periods are high-volatility regimes driven by weather shifts or supply shocks.")
+        plot_price_volatility(zone, start_str, end_str)
+        st.subheader("Peak vs Off-peak spread")
+        st.caption("Traders trade the peak (08-20 weekdays) vs off-peak price gap. A positive spread means daytime power is more expensive, which is normal for demand-driven markets.")
+        plot_peak_offpeak(zone, start_str, end_str)
 
     with tab3:        
         st.subheader("Energy Generation Distribution")
+        st.caption("Stacked area chart of generation by fuel type, ordered from cheapest (renewables) to most expensive (gas/oil). This is the merit order in action.")
         plot_generation_mix(zone, start_str, end_str)
         st.subheader("Energy Load vs Generation")
+        st.caption("Total electricity consumption vs total generation. The gap is covered by imports (if load > generation) or exports (if generation > load).")
         plot_supply_demand(zone, start_str, end_str)
         st.subheader("Residual Load")
+        st.caption("Load minus total generation. Positive residual means the zone needs imports; negative means it has surplus to export.")
         plot_residual_load(zone, start_str, end_str)
         st.subheader("Renewable Share")
+        st.caption("Percentage of total generation coming from wind + solar. Higher penetration tends to push prices down via the merit order effect.")
         plot_renewable_penetration(zone, start_str, end_str)
-        st.subheader("Renewable Share vs Price")
-        plot_penetration_vs_price(zone, start_str, end_str)
-        st.subheader("Fossil Share vs Price")
-        plot_fossil_ratio_vs_price(zone, start_str, end_str)
+        st.subheader("Renewable Share vs Price | Fossil Share vs Price")
+        st.caption("Left: inverse relationship between renewable penetration and spot price. Right: fossil share correlates positively with price when gas/coal set the marginal price.")
+        col_pen, col_fossil = st.columns(2)
+        with col_pen:
+            plot_penetration_vs_price(zone, start_str, end_str, figsize=(5, 3.5))
+        with col_fossil:
+            plot_fossil_ratio_vs_price(zone, start_str, end_str, figsize=(5, 3.5))
+        st.subheader("Solar Duck Curve")
+        st.caption("Compares the intraday residual load shape on high-solar vs low-solar days. The midday dip and steep evening ramp create the classic 'duck curve' that challenges grid operators.")
+        plot_duck_curve(zone, start_str, end_str)
 
     with tab4:
         st.subheader("Flows into zone")
+        st.caption("Cross-border electricity imports from neighboring zones. Stacked by origin to show which neighbors supply the most power.")
         plot_flows_in(zone, start_str, end_str)
         st.subheader("Flows out of zone")
+        st.caption("Cross-border electricity exports to neighboring zones. High exports typically occur when the zone has surplus generation (e.g., strong wind).")
         plot_flows_out(zone, start_str, end_str)
+        st.subheader("Congestion / capacity analysis")
+        st.caption("Detects when cross-border flows flatline at capacity limits (congestion). When congested, prices between zones decouple — the core constraint on European power distribution.")
+        plot_congestion(zone, start_str, end_str)
         st.subheader("Net import vs Spot price")
+        st.caption("Relationship between net imports and spot price. High net imports with high prices signal domestic supply shortage; low imports with low prices signal surplus.")
         plot_net_import_vs_price(zone, start_str, end_str)
         plot_net_import_vs_price_2(zone, start_str, end_str)
+        st.subheader("Flow driver decomposition")
+        st.caption("What drives net power flow? Shows correlations between net import and price spread vs neighbors, wind generation, load, and renewable share.")
+        plot_flow_drivers(zone, start_str, end_str)
 
     with tab5:
         st.subheader("Temperature vs Load")
+        st.caption("Electricity demand rises in cold weather (heating) and hot weather (cooling). This U-shaped relationship is a key fundamental for price forecasting.")
         plot_weather_load(zone, start_str, end_str)
         st.subheader("Wind vs Wind Generation")
+        st.caption("Wind speed directly drives wind turbine output. The non-linear relationship reflects cut-in speed, rated power, and cut-out limits of turbines.")
         plot_wind_generation(zone, start_str, end_str)
+        st.subheader("Cloud cover vs Solar generation")
+        st.caption("Solar output drops sharply with increasing cloud cover. This daytime-only analysis shows how cloud conditions impact renewable supply and residual demand.")
+        plot_cloud_solar(zone, start_str, end_str)
+        st.subheader("Temperature extremes vs Price")
+        st.caption("Cold and hot extremes (bottom/top 10% of temperature) drive load spikes for heating and cooling, which in turn push spot prices higher.")
+        plot_weather_price_impact(zone, start_str, end_str)
 
     with tab6:
         st.subheader("Price correlation matrix")
+        st.caption("How tightly are spot prices linked across zones? High correlation means strong market coupling; low correlation means frequent congestion or different generation mixes.")
         plot_correlation_matrix()
         st.subheader(f"{zone} vs neighbor price spreads")
+        st.caption("Price difference between the selected zone and each neighbor over time. Large persistent spreads signal congestion on interconnectors.")
         plot_price_spreads(zone, start_str, end_str)
+        st.subheader("Coupling event detection")
+        st.caption("When the price spread between two zones is near zero, they are 'coupled' (same market price). When it diverges, congestion prevents price equalization.")
+        plot_coupling_events(zone, start_str, end_str)
+        st.subheader("Cross-zone arbitrage opportunities")
+        st.caption("For each 15-min interval, the maximum price spread across all zone pairs. Traders profit by buying in the cheapest zone and selling in the most expensive.")
+        plot_arbitrage(start_str, end_str)
 
     with tab7:
         st.header("Marginal Pricing Analysis")
+        st.caption("In Europe's marginal pricing system, all generators are paid the price of the most expensive unit needed. Renewables with near-zero fuel costs earn 'inframarginal rent' — the gap between market price and their cost.")
         evaluate_renewable_business_case(zone, start_str, end_str)
         st.divider()
 
@@ -161,6 +227,10 @@ def main():
         st.subheader(f"{zone}: Spot price prediction")
         st.caption("Choose model, click Start train. Trains on first 90%, predicts on last 10% of date range.")
         plot_prediction(zone, start_str, end_str)
+        st.divider()
+        st.subheader("Feature importance comparison across zones")
+        st.caption("Train a quick RandomForest on each zone and compare which features matter most. E.g., wind dominates in DK1 while temperature matters more in FR.")
+        plot_feature_importance_comparison()
         
 
 

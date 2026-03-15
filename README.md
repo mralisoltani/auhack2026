@@ -18,6 +18,24 @@ The European power market behaves like a complex distributed system. Spot prices
 
 ---
 
+##  Visual Walkthrough
+
+### 1. Pick your data: Regional Selection & Custom Uploads
+Seamlessly choose between established European bidding zones or bring your own data.
+![Select Data](./docs/select_data.gif)
+
+### 2. Fundamental Analysis: From Raw Data to Insights
+Transform raw generation, load, and weather feeds into high-value charts, highlighting exactly how weather fundamentals and supply-demand imbalances drive market stress
+![Analyze Data](./docs/visualize_data.gif)
+
+### 3. Model Engineering: Feature Relevance & Training
+Select the most impactful features and train your models. 
+![Train Model](./docs/train.gif)
+
+### 4. Live Simulation: Validating the Forecast
+Benchmarking the ML pipeline against reality.
+![Live Simulation](./docs/live_sim.gif)
+
 ## Technologies & Methods
 
 ### Stack

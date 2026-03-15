@@ -37,9 +37,10 @@ def plot_renewable_penetration(zone: str, start: str, end: str) -> None:
         
     fig, ax = plt.subplots(figsize=(12, 4))
     sample["penetration"].plot(ax=ax, label="Renewable Share", color="C3")
-    ax.set_ylabel("Penetration (%)")
+    ax.set_ylabel("Renewable Share (%)")
     ax.set_title(f"{zone}: Renewable Share (Wind + Solar / Total Generation)")
     ax.legend()
+    ax.grid(True, alpha=0.3, linestyle='--')
     format_date_axis(ax)
     tight_layout(fig)
     st.pyplot(fig)
@@ -78,6 +79,7 @@ def plot_penetration_vs_price(zone: str, start: str, end: str, figsize: tuple = 
         ax.set_xlabel("Renewable Share (%)")
         ax.set_ylabel("Spot Price (EUR/MWh)")
         ax.set_title(f"{zone}: Renewable Share vs Spot Price")
+        ax.grid(True, alpha=0.3, linestyle='--')
         tight_layout(fig)
         st.pyplot(fig)
         plt.close()
@@ -117,6 +119,7 @@ def plot_fossil_ratio_vs_price(zone: str, start: str, end: str, figsize: tuple =
         ax.set_xlabel("Fossil Fuel Ratio (%)")
         ax.set_ylabel("Spot Price (EUR/MWh)")
         ax.set_title(f"{zone}: Fossil Fuel Ratio vs Spot Price")
+        ax.grid(True, alpha=0.3, linestyle='--')
         tight_layout(fig)
         st.pyplot(fig)
         plt.close()
@@ -125,27 +128,54 @@ def plot_fossil_ratio_vs_price(zone: str, start: str, end: str, figsize: tuple =
 
 
 def plot_supply_demand(zone: str, start: str, end: str) -> None:
-    """Load vs Generation."""
+    """Load vs Generation with shaded Net Position areas."""
     try:
         load = load_total_load(zone)
         gen = load_generation_pivot(zone)
-    except FileNotFoundError:
+    except (FileNotFoundError, KeyError):
         st.warning(f"No load/generation data for {zone}.")
         return
-    gen["total_gen"] = gen.sum(axis=1)
-    l_sample = naive_index(load.loc[start:end])
-    g_sample = naive_index(gen.loc[start:end])
+
+    # Slice first to ensure indices align perfectly
+    l_sample = load.loc[start:end]
+    g_sample = gen.loc[start:end]
+    
     if l_sample.empty or g_sample.empty:
         st.warning("No data for selected zone/range.")
         return
-    fig, ax = plt.subplots(figsize=(12, 4))
-    l_sample["load"].plot(ax=ax, label="Load", color="C0")
-    g_sample["total_gen"].plot(ax=ax, label="Generation", color="C1", alpha=0.8)
-    ax.set_ylabel("MW")
-    ax.set_title(f"{zone}: Load vs Generation")
-    ax.legend()
+
+    # Calculate total generation on the slice
+    # select_dtypes ensures we only sum numbers
+    total_gen = g_sample.select_dtypes(include=['number']).sum(axis=1)
+    load_vals = l_sample["load"]
+    time_index = l_sample.index
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    # 1. Plot the primary lines
+    ax.plot(time_index, load_vals, label="Load", color="#1f77b4", linewidth=1.5)
+    ax.plot(time_index, total_gen, label="Generation", color="#ff7f0e", linewidth=1.5, alpha=0.9)
+
+    # 2. Fill Green where Generation > Load (Exporting)
+    ax.fill_between(time_index, load_vals, total_gen, 
+                    where=(total_gen > load_vals), 
+                    interpolate=True, color='green', alpha=0.1, label='Surplus')
+
+    # 3. Fill Red where Generation < Load (Importing)
+    ax.fill_between(time_index, load_vals, total_gen, 
+                    where=(total_gen <= load_vals), 
+                    interpolate=True, color='red', alpha=0.075, label='Deficit')
+
+    # Formatting
+    ax.set_ylabel("Power (MW)")
+    ax.set_title(f"{zone}: Supply/Demand Balance & Net Position")
+    ax.legend(loc="upper right", fontsize=9)
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    # Use your helper functions
     format_date_axis(ax)
-    tight_layout(fig)
+    plt.tight_layout()
+    
     st.pyplot(fig)
     plt.close()
 
@@ -207,6 +237,7 @@ def plot_residual_load(zone: str, start: str, end: str) -> None:
     ax.legend()
     format_date_axis(ax)
     tight_layout(fig)
+    ax.grid(True, alpha=0.3, linestyle='--')
     st.pyplot(fig)
     plt.close()
 
@@ -282,7 +313,7 @@ def plot_generation_mix(zone: str, start: str, end: str) -> None:
     ax.axhline(0, color='black', linewidth=0.8)
 
     # 4. Use a more professional font and grid
-    ax.grid(True, which='major', linestyle='--', alpha=0.4)
+    ax.grid(True, alpha=0.3, linestyle='--')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     format_date_axis(ax)

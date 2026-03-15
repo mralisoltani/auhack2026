@@ -40,11 +40,16 @@ from dashboard.plots import (
 
 def main():
     st.set_page_config(page_title="European Power Market", page_icon="⚡", layout="wide")
+
+    # Wide cover image at top
+    cover_path = Path(__file__).resolve().parent / "assets" / "in_commodities_a_s_cover.jpg"
+    if cover_path.exists():
+        st.image(str(cover_path), use_container_width=True)
     st.title("European Power Market Dashboard")
     st.caption("AU Hack 2026 — InCommodities case - JAKA Team")
 
     with st.sidebar:
-        st.header("Controls")
+        st.caption("Please start by choosing the region")
 
         # Zones from disk + custom (dynamic) — union so new zones appear with any data
         flow_zones = get_flow_zones()
@@ -58,7 +63,6 @@ def main():
         zone = st.session_state.selected_zone
 
         # Map first so we can update selected_zone from clicks before the selectbox is created
-        st.caption("Or click a country on the map")
         clicked_zone = render_zone_map(zone, key="zone_map")
         if clicked_zone and clicked_zone != zone and clicked_zone in all_zones:
             st.session_state.selected_zone = clicked_zone

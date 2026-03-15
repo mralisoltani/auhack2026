@@ -171,15 +171,15 @@ def _section_generation(zone: str, start: str, end: str) -> None:
     summary = desc.loc[rows].T.rename(columns={"50%": "median"})
     summary["nulls"] = sample.isna().sum()
     st.dataframe(summary, use_container_width=True)
-    # Distribution plots for top types by mean
-    top_cols = sample.mean().nlargest(6).index.tolist()
-    if top_cols:
-        n_plots = len(top_cols)
+    # Distribution plots for all generation types
+    all_cols = sample.columns.tolist()
+    if all_cols:
+        n_plots = len(all_cols)
         n_cols = 3
         n_rows = max(1, (n_plots + n_cols - 1) // n_cols)
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 2.5 * n_rows))
         axes = np.atleast_2d(axes)
-        for i, col in enumerate(top_cols):
+        for i, col in enumerate(all_cols):
             r, c = i // n_cols, i % n_cols
             _plot_distribution(sample[col], col, axes[r, c])
         for i in range(n_plots, n_rows * n_cols):

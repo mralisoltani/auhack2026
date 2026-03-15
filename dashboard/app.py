@@ -117,15 +117,19 @@ def main():
         st.subheader("Energy Generation Distribution")
         plot_generation_mix(zone, start_str, end_str)
         st.subheader("Energy Load vs Generation")
-        plot_supply_demand(zone, start_str, end_str)
+        plot_supply_demand(zone, start_str, end_str)            
         st.subheader("Residual Load")
-        plot_residual_load(zone, start_str, end_str)
+        plot_residual_load(zone, start_str, end_str)    
         st.subheader("Renewable Share")
         plot_renewable_penetration(zone, start_str, end_str)
-        st.subheader("Renewable Share vs Price")
-        plot_penetration_vs_price(zone, start_str, end_str)
-        st.subheader("Fossil Share vs Price")
-        plot_fossil_ratio_vs_price(zone, start_str, end_str)
+            
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Renewable Share vs Price")
+            plot_penetration_vs_price(zone, start_str, end_str)
+        with col2:
+            st.subheader("Fossil Share vs Price")
+            plot_fossil_ratio_vs_price(zone, start_str, end_str)
 
     with tab4:
         st.subheader("Flows into zone")

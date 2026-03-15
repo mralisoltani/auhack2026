@@ -36,8 +36,9 @@ from dashboard.plots import (
     plot_flow_drivers,
     plot_weather_load,
     plot_wind_generation,
-    plot_cloud_solar,
-    plot_weather_price_impact,
+    plot_cloud_cover_solar_generation,
+    plot_humidity_load,
+    plot_apparent_temp_load,
     plot_correlation_matrix,
     plot_price_spreads,
     plot_coupling_events,
@@ -204,24 +205,35 @@ def main():
 
     with tab5:
         st.markdown("**How does weather affect production and consumption?** Does temperature drive load? Does wind speed drive wind generation? Does cloud cover affect solar output?")
-        st.divider()
-        
+        st.divider()        
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("Temperature vs Load")
             st.caption("Electricity demand rises in cold weather (heating) and hot weather (cooling). This U-shaped relationship is a key fundamental for price forecasting.")
             plot_weather_load(zone, start_str, end_str)
             
-        with col2:        
+        with col2:
             st.subheader("Wind vs Wind Generation")
             st.caption("Wind speed directly drives wind turbine output. The non-linear relationship reflects cut-in speed, rated power, and cut-out limits of turbines.")
+            
             plot_wind_generation(zone, start_str, end_str)
-        st.subheader("Cloud cover vs Solar generation")
-        st.caption("Solar output drops sharply with increasing cloud cover. This daytime-only analysis shows how cloud conditions impact renewable supply and residual demand.")
-        plot_cloud_solar(zone, start_str, end_str)
+        
+        st.divider()
+        col3, col4 = st.columns(2)
+        with col3:
+            st.subheader("Cloud cover vs Solar generation")
+            st.caption("Solar output drops sharply with increasing cloud cover. This daytime-only analysis shows how cloud conditions impact renewable supply and residual demand.")
+            plot_cloud_cover_solar_generation(zone, start_str, end_str)
+        with col4:
+            st.subheader("Humidity vs Load")
+            plot_humidity_load(zone, start_str, end_str)
+        st.subheader("Apparent Temperature vs Load")
+        plot_apparent_temp_load(zone, start_str, end_str)
+        
         st.subheader("Temperature extremes vs Price")
         st.caption("Cold and hot extremes (bottom/top 10% of temperature) drive load spikes for heating and cooling, which in turn push spot prices higher.")
         plot_weather_price_impact(zone, start_str, end_str)
+
 
     with tab6:
         st.markdown("**Which zones are price-linked, and when do they couple or decouple?** Where are cross-zone arbitrage opportunities?")

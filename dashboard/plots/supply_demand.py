@@ -179,16 +179,14 @@ def plot_supply_demand(zone: str, start: str, end: str) -> None:
     st.pyplot(fig)
     plt.close()
 
-
 def plot_residual_load(zone: str, start: str, end: str) -> None:
-    """Residual Load and Net Flow."""
+    """Load vs Generation and Residual Load."""
     try:
         load = load_total_load(zone)
         gen = load_generation_pivot(zone)
     except FileNotFoundError:
         st.warning(f"No load/generation data for {zone}.")
         return
-
     gen["total_gen"] = gen.sum(axis=1)
     l_sample = naive_index(load.loc[start:end])
     g_sample = naive_index(gen.loc[start:end])

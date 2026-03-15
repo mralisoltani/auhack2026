@@ -229,6 +229,11 @@ def main():
             plot_humidity_load(zone, start_str, end_str)
         st.subheader("Apparent Temperature vs Load")
         plot_apparent_temp_load(zone, start_str, end_str)
+        
+        st.subheader("Temperature extremes vs Price")
+        st.caption("Cold and hot extremes (bottom/top 10% of temperature) drive load spikes for heating and cooling, which in turn push spot prices higher.")
+        plot_weather_price_impact(zone, start_str, end_str)
+
 
     with tab6:
         st.markdown("**Which zones are price-linked, and when do they couple or decouple?** Where are cross-zone arbitrage opportunities?")

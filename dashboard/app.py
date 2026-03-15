@@ -30,6 +30,9 @@ from dashboard.plots import (
     plot_net_import_vs_price_2,
     plot_weather_load,
     plot_wind_generation,
+    plot_cloud_cover_solar_generation,
+    plot_humidity_load,
+    plot_apparent_temp_load,
     plot_correlation_matrix,
     plot_price_spreads,
     plot_prediction,
@@ -141,10 +144,24 @@ def main():
         plot_net_import_vs_price_2(zone, start_str, end_str)
 
     with tab5:
-        st.subheader("Temperature vs Load")
-        plot_weather_load(zone, start_str, end_str)
-        st.subheader("Wind vs Wind Generation")
-        plot_wind_generation(zone, start_str, end_str)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Temperature vs Load")
+            plot_weather_load(zone, start_str, end_str)
+        with col2:
+            st.subheader("Wind vs Wind Generation")
+            plot_wind_generation(zone, start_str, end_str)
+        
+        st.divider()
+        col3, col4 = st.columns(2)
+        with col3:
+            st.subheader("Cloud Cover vs Solar Generation")
+            plot_cloud_cover_solar_generation(zone, start_str, end_str)
+        with col4:
+            st.subheader("Humidity vs Load")
+            plot_humidity_load(zone, start_str, end_str)
+        st.subheader("Apparent Temperature vs Load")
+        plot_apparent_temp_load(zone, start_str, end_str)
 
     with tab6:
         st.subheader("Price correlation matrix")

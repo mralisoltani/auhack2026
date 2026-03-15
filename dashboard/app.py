@@ -162,9 +162,11 @@ def main():
         st.subheader("Residual Load")
         st.caption("Load minus total generation. Positive residual means the zone needs imports; negative means it has surplus to export.")
         plot_residual_load(zone, start_str, end_str)
+
         st.subheader("Renewable Share")
         st.caption("Percentage of total generation coming from wind + solar. Higher penetration tends to push prices down via the merit order effect.")
         plot_renewable_penetration(zone, start_str, end_str)
+
         st.subheader("Renewable Share vs Price | Fossil Share vs Price")
         st.caption("Left: inverse relationship between renewable penetration and spot price. Right: fossil share correlates positively with price when gas/coal set the marginal price.")
         col_pen, col_fossil = st.columns(2)
@@ -203,12 +205,17 @@ def main():
     with tab5:
         st.markdown("**How does weather affect production and consumption?** Does temperature drive load? Does wind speed drive wind generation? Does cloud cover affect solar output?")
         st.divider()
-        st.subheader("Temperature vs Load")
-        st.caption("Electricity demand rises in cold weather (heating) and hot weather (cooling). This U-shaped relationship is a key fundamental for price forecasting.")
-        plot_weather_load(zone, start_str, end_str)
-        st.subheader("Wind vs Wind Generation")
-        st.caption("Wind speed directly drives wind turbine output. The non-linear relationship reflects cut-in speed, rated power, and cut-out limits of turbines.")
-        plot_wind_generation(zone, start_str, end_str)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Temperature vs Load")
+            st.caption("Electricity demand rises in cold weather (heating) and hot weather (cooling). This U-shaped relationship is a key fundamental for price forecasting.")
+            plot_weather_load(zone, start_str, end_str)
+            
+        with col2:        
+            st.subheader("Wind vs Wind Generation")
+            st.caption("Wind speed directly drives wind turbine output. The non-linear relationship reflects cut-in speed, rated power, and cut-out limits of turbines.")
+            plot_wind_generation(zone, start_str, end_str)
         st.subheader("Cloud cover vs Solar generation")
         st.caption("Solar output drops sharply with increasing cloud cover. This daytime-only analysis shows how cloud conditions impact renewable supply and residual demand.")
         plot_cloud_solar(zone, start_str, end_str)

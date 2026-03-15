@@ -8,23 +8,29 @@ from dashboard.utils import get_prices_15min, naive_index, format_date_axis, tig
 from src.zone_registry import get_spot_zones
 
 
-def plot_correlation_matrix() -> None:
-    """Spot price correlation matrix across zones."""
+def plot_correlation_matrix(zone: str) -> None:
+    """Bar chart of spot price correlations between selected zone and all others, sorted by strength."""
     prices = get_prices_15min(tuple(get_spot_zones()))
+    if zone not in prices.columns:
+        st.warning(f"{zone} not in price data.")
+        return
     corr = prices.corr()
-    fig, ax = plt.subplots(figsize=(8, 6))
-    im = ax.imshow(corr, cmap="RdBu_r", vmin=-1, vmax=1)
-    ax.set_xticks(range(len(corr.columns)))
-    ax.set_xticklabels(corr.columns)
-    ax.set_yticks(range(len(corr.index)))
-    ax.set_yticklabels(corr.index)
-    for i in range(len(corr.index)):
-        for j in range(len(corr.columns)):
-            val = corr.iloc[i, j]
-            color = "white" if abs(val) > 0.5 else "black"
-            ax.text(j, i, f"{val:.2f}", ha="center", va="center", fontsize=9, color=color)
-    plt.colorbar(im, label="Correlation")
-    plt.title("Spot price correlation across zones")
+    # Correlations of selected zone with all others (exclude self)
+    zone_corr = corr[zone].drop(zone, errors="ignore").sort_values(ascending=False)
+    if zone_corr.empty:
+        st.warning("No other zones to correlate with.")
+        return
+
+    fig, ax = plt.subplots(figsize=(10, max(5, len(zone_corr) * 0.4)))
+    colors = ["#238636" if v >= 0 else "#ff4b4b" for v in zone_corr.values]
+    bars = ax.barh(zone_corr.index, zone_corr.values, color=colors, alpha=0.85, edgecolor="white", linewidth=0.5)
+    ax.axvline(0, color="gray", ls="--", lw=1)
+    ax.set_xlabel("Correlation with spot price")
+    ax.set_xlim(-1.05, 1.05)
+    ax.set_title(f"{zone}: Price correlation with other zones")
+    ax.grid(True, axis="x", alpha=0.3)
+    for i, (idx, val) in enumerate(zone_corr.items()):
+        ax.text(val + (0.02 if val >= 0 else -0.02), i, f"{val:.2f}", va="center", ha="left" if val >= 0 else "right", fontsize=9, fontweight="medium")
     tight_layout(fig)
     st.pyplot(fig)
     plt.close()

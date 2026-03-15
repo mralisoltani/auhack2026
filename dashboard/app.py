@@ -124,9 +124,13 @@ def main():
         ])
 
     with tab1:
+        st.markdown("**What data do we have, and is it complete?** What are the distributions and time ranges for each data type?")
+        st.divider()
         plot_data_overview(zone, start_str, end_str)
 
     with tab2:
+        st.markdown("**What do spot prices look like across zones?** When do they spike, go negative, or become volatile? What is the peak vs off-peak spread?")
+        st.divider()
         st.subheader("Spot prices across zones")
         st.caption("Compare day-ahead electricity prices across European bidding zones. Price convergence signals market coupling; divergence signals congestion.")
         plot_spot_prices(start_str, end_str)
@@ -146,7 +150,9 @@ def main():
         st.caption("Traders trade the peak (08-20 weekdays) vs off-peak price gap. A positive spread means daytime power is more expensive, which is normal for demand-driven markets.")
         plot_peak_offpeak(zone, start_str, end_str)
 
-    with tab3:        
+    with tab3:
+        st.markdown("**How does supply meet demand, and what drives the spot price?** Why do renewables earn a profit despite near-zero fuel costs?")
+        st.divider()
         st.subheader("Energy Generation Distribution")
         st.caption("Stacked area chart of generation by fuel type, ordered from cheapest (renewables) to most expensive (gas/oil). This is the merit order in action.")
         plot_generation_mix(zone, start_str, end_str)
@@ -175,6 +181,8 @@ def main():
         evaluate_renewable_business_case(zone, start_str, end_str)
 
     with tab4:
+        st.markdown("**How is power distributed between countries?** What drives net imports and exports? When do interconnectors hit capacity limits?")
+        st.divider()
         st.subheader("Flows into zone")
         st.caption("Cross-border electricity imports from neighboring zones. Stacked by origin to show which neighbors supply the most power.")
         plot_flows_in(zone, start_str, end_str)
@@ -193,6 +201,8 @@ def main():
         plot_flow_drivers(zone, start_str, end_str)
 
     with tab5:
+        st.markdown("**How does weather affect production and consumption?** Does temperature drive load? Does wind speed drive wind generation? Does cloud cover affect solar output?")
+        st.divider()
         st.subheader("Temperature vs Load")
         st.caption("Electricity demand rises in cold weather (heating) and hot weather (cooling). This U-shaped relationship is a key fundamental for price forecasting.")
         plot_weather_load(zone, start_str, end_str)
@@ -207,9 +217,11 @@ def main():
         plot_weather_price_impact(zone, start_str, end_str)
 
     with tab6:
-        st.subheader("Price correlation matrix")
-        st.caption("How tightly are spot prices linked across zones? High correlation means strong market coupling; low correlation means frequent congestion or different generation mixes.")
-        plot_correlation_matrix()
+        st.markdown("**Which zones are price-linked, and when do they couple or decouple?** Where are cross-zone arbitrage opportunities?")
+        st.divider()
+        st.subheader("Price correlation by zone")
+        st.caption("How tightly is the selected zone's spot price linked to others? High correlation means strong market coupling; low correlation means frequent congestion or different generation mixes.")
+        plot_correlation_matrix(zone)
         st.subheader(f"{zone} vs neighbor price spreads")
         st.caption("Price difference between the selected zone and each neighbor over time. Large persistent spreads signal congestion on interconnectors.")
         plot_price_spreads(zone, start_str, end_str)
@@ -221,6 +233,8 @@ def main():
         plot_arbitrage(start_str, end_str)
 
     with tab7:
+        st.markdown("**Can we predict spot prices from fundamentals?** Which features matter most for each zone?")
+        st.divider()
         st.subheader(f"{zone}: Spot price prediction")
         st.caption("Choose model, click Start train. Trains on first 90%, predicts on last 10% of date range.")
         plot_prediction(zone, start_str, end_str)

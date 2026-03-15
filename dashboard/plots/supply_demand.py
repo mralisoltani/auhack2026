@@ -2,9 +2,11 @@
 import random
 import streamlit as st
 import matplotlib.pyplot as plt
+import pandas as pd
 
-from dashboard.utils import naive_index, format_date_axis, tight_layout, to_15min
-from src.data_loader import load_total_load, load_generation_pivot, load_spot_price
+from dashboard.utils import get_flows_pivot_15min, naive_index, format_date_axis, tight_layout, to_15min
+from src.data_loader import load_total_load, load_generation_pivot, load_spot_price, load_flows_out_of
+from src.data_loader import load_spot_price, load_flows_out_of
 
 
 def plot_renewable_penetration(zone: str, start: str, end: str) -> None:
@@ -141,8 +143,9 @@ def plot_supply_demand(zone: str, start: str, end: str) -> None:
     st.pyplot(fig)
     plt.close()
 
+
 def plot_residual_load(zone: str, start: str, end: str) -> None:
-    """Load vs Generation and Residual Load."""
+    """Residual Load and Net Flow."""
     load = load_total_load(zone)
     gen = load_generation_pivot(zone)
     gen["total_gen"] = gen.sum(axis=1)
@@ -155,15 +158,41 @@ def plot_residual_load(zone: str, start: str, end: str) -> None:
     # Combine load and generation for alignment and calculate residual
     combined = load.join(gen[['total_gen']], how='inner').dropna()
     combined['residual_load'] = combined['load'] - combined['total_gen']
+    
+    # Calculate net flow (Imports - Exports)
+    try:
+        pivot_in = get_flows_pivot_15min(zone)
+        total_import = pivot_in["net_import"]
+    except Exception:
+        total_import = pd.Series(0, index=combined.index)
+        
+    try:
+        flows_out = load_flows_out_of(zone)
+        if not flows_out.empty:
+            pivot_out = flows_out.pivot(index="time", columns="zone", values="value (MW)")
+            pivot_out.index = pd.to_datetime(pivot_out.index, utc=True)
+            pivot_out = to_15min(pivot_out)
+            total_export = pivot_out.sum(axis=1)
+        else:
+            total_export = pd.Series(0, index=combined.index)
+    except Exception:
+        total_export = pd.Series(0, index=combined.index)
+        
+    combined = combined.join(total_import.rename("total_import"), how="left")
+    combined = combined.join(total_export.rename("total_export"), how="left")
+    combined.fillna(0, inplace=True)
+    combined['net_flow'] = combined['total_import'] - combined['total_export']
+
     sample = naive_index(combined.loc[start:end])
     if sample.empty:
         st.warning("No data for selected zone/range.")
         return
     fig, ax = plt.subplots(figsize=(12, 4))      
     sample["residual_load"].plot(ax=ax, label="Residual Load", color="C2", alpha=0.8)
+    sample["net_flow"].plot(ax=ax, label="Net Flow (Imports - Exports)", color="C4", alpha=0.8, linestyle="--")
     ax.axhline(0, color='gray', linestyle='--', linewidth=0.5)
     ax.set_ylabel("MW")    
-    ax.set_title(f"{zone}: Residual Load")
+    ax.set_title(f"{zone}: Residual Load & Net Flow")
     ax.legend()
     format_date_axis(ax)
     tight_layout(fig)

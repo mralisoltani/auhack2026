@@ -113,14 +113,13 @@ def main():
         # Add new country section
         from dashboard.add_zone_ui import render_add_zone_section
         render_add_zone_section()
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Data Overview",
         "Spot Prices",
         "Supply & Demand",
         "Flows",
         "Weather",
         "Market Coupling",
-        "Marginal Pricing",
         "Prediction",
         ])
 
@@ -170,6 +169,10 @@ def main():
         st.subheader("Solar Duck Curve")
         st.caption("Compares the intraday residual load shape on high-solar vs low-solar days. The midday dip and steep evening ramp create the classic 'duck curve' that challenges grid operators.")
         plot_duck_curve(zone, start_str, end_str)
+        st.divider()
+        st.subheader("Marginal Pricing & Renewable Business Case")
+        st.caption("In Europe's marginal pricing system, all generators are paid the price of the most expensive unit needed. Renewables with near-zero fuel costs earn 'inframarginal rent' — the gap between market price and their cost.")
+        evaluate_renewable_business_case(zone, start_str, end_str)
 
     with tab4:
         st.subheader("Flows into zone")
@@ -218,12 +221,6 @@ def main():
         plot_arbitrage(start_str, end_str)
 
     with tab7:
-        st.header("Marginal Pricing Analysis")
-        st.caption("In Europe's marginal pricing system, all generators are paid the price of the most expensive unit needed. Renewables with near-zero fuel costs earn 'inframarginal rent' — the gap between market price and their cost.")
-        evaluate_renewable_business_case(zone, start_str, end_str)
-        st.divider()
-
-    with tab8:
         st.subheader(f"{zone}: Spot price prediction")
         st.caption("Choose model, click Start train. Trains on first 90%, predicts on last 10% of date range.")
         plot_prediction(zone, start_str, end_str)

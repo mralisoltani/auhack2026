@@ -58,7 +58,6 @@ def evaluate_renewable_business_case(zone: str, start: str, end: str):
     Because of **Marginal Pricing**, renewable sources in **{zone}** don't just get paid their costs; 
     they are paid the price of the most expensive unit needed. 
     
-    - **Total 'Free' Revenue:** €{total_rent:,.2f} 
     - **Business Edge:** Renewables earned **€{capture_price:.2f}/MWh** despite having near-zero fuel costs.
     """)
     

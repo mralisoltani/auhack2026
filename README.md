@@ -22,7 +22,7 @@ The European power market behaves like a complex distributed system. Spot prices
 
 ### 1. Pick your data: Regional Selection & Custom Uploads
 Seamlessly choose between established European bidding zones or bring your own data.
-![Select Data](./docs/select_data.gif)
+<img src="./docs/select_data.gif" width="60% text-align="center"">
 
 ### 2. Fundamental Analysis: From Raw Data to Insights
 Transform raw generation, load, and weather feeds into high-value charts, highlighting exactly how weather fundamentals and supply-demand imbalances drive market stress

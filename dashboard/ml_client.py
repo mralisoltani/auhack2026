@@ -1,11 +1,10 @@
 """ML API client for training and inference."""
-import os
 from typing import Any
 
 import pandas as pd
 import requests
 
-ML_API_URL = os.environ.get("ML_API_URL", "http://localhost:8000")
+from src.config import ML_API_URL
 TIMEOUT = 300  # 5 min for training
 
 

@@ -1,6 +1,8 @@
 services:
   ml-api:
-    build: ./ml_service
+    build:
+      context: .
+      dockerfile: ml_service/Dockerfile
     ports:
       - "8000:8000"
     volumes:

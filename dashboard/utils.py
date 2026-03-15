@@ -41,9 +41,9 @@ def tight_layout(fig, pad: float = 1.2) -> None:
 
 
 def to_15min(df: pd.DataFrame) -> pd.DataFrame:
-    """Expand hourly/mixed data to 15-min with ffill."""
-    full_idx = pd.date_range(df.index.min(), df.index.max(), freq="15min", tz="UTC")
-    return df.reindex(full_idx).ffill()
+    """Expand hourly/mixed data to 15-min with ffill. Re-exported from src.utils."""
+    from src.utils import to_15min as _to_15min
+    return _to_15min(df)
 
 
 def naive_index(df: pd.DataFrame) -> pd.DataFrame:

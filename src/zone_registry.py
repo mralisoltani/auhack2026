@@ -1,11 +1,9 @@
 """
 Dynamic zone registry: discovers zones from data folders and custom uploads.
 """
-from pathlib import Path
 import json
 
-DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
-CUSTOM_ZONES_PATH = Path(__file__).resolve().parent.parent / "dashboard" / "data" / "custom_zones.json"
+from src.config import DATA_ROOT, CUSTOM_ZONES_PATH
 
 # Built-in zones (from original data)
 BUILTIN_SPOT = ["AT", "BE", "CH", "CZ", "DE", "DK1", "FR", "NL", "PL"]

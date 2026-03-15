@@ -24,10 +24,16 @@ Notebooks for the InCommodities case: **Decode the power market**.
 
 ## Dependencies
 
-- pandas
-- matplotlib
-- scikit-learn (for 07)
-- Run from project root or ensure `sys.path` includes parent for `src.data_loader`.
+```bash
+pip install -r requirements.txt
+```
+
+Or install in editable mode: `pip install -e .`
+
+## Running
+
+- **Dashboard**: `streamlit run dashboard/app.py`
+- **Full instructions** (Docker, API mode): see [docs/RUNNING.md](docs/RUNNING.md)
 
 ## Why this matters
 

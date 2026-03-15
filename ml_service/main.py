@@ -11,7 +11,8 @@ from schemas import ModelInfo, PredictRequest, PredictResponse, TrainRequest, Tr
 from serializer import load_artifact, resolve_model_path, save_artifact
 from trainer import predict_from_artifact, train_and_predict
 
-MODEL_DIR = Path(os.environ.get("MODEL_DIR", "./models"))
+from src.config import MODEL_DIR
+
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="ML API", description="Training and inference for spot price prediction")

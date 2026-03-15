@@ -8,301 +8,31 @@ import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import Ridge
-from sklearn.neural_network import MLPRegressor
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 from dashboard.utils import to_15min, naive_index, format_date_axis, tight_layout
 from dashboard import ml_client
-from src.data_loader import (
-    load_spot_price,
-    load_total_load,
-    load_generation_pivot,
-    load_weather,
-    load_flows_into,
-)
+from src.data_loader import load_spot_price
 from src.zone_registry import get_spot_zones
+from src.features import build_features
+from src.ml_trainer import (
+    HAS_CB,
+    HAS_LGB,
+    HAS_XGB,
+    SEED_POOL,
+    temporal_split,
+    train_and_predict,
+    predict_from_artifact,
+)
 
-# Optional gradient boosting libs
-try:
-    import xgboost as xgb
-    HAS_XGB = True
-except ImportError:
-    HAS_XGB = False
-try:
-    import lightgbm as lgb
-    HAS_LGB = True
-except ImportError:
-    HAS_LGB = False
-try:
-    import catboost as cb
-    HAS_CB = True
-except ImportError:
-    HAS_CB = False
-
-SEED_POOL = [42, 123, 456, 19, 26]  # Up to 5 seeds for multi-seed averaging
 VAL_FRAC = 0.1  # 10% for early stopping
 TEST_FRAC = 0.1  # last 10% for prediction display
-
-
-def build_features(zone: str) -> pd.DataFrame | None:
-    """Build 15-min feature matrix for prediction. Returns None if data missing."""
-    try:
-        load = load_total_load(zone)
-        gen = load_generation_pivot(zone)
-        weather = to_15min(load_weather(zone))
-        flows = load_flows_into(zone)
-    except FileNotFoundError:
-        return None
-
-    pivot_flows = flows.pivot(index="time", columns="zone", values="value (MW)")
-    pivot_flows.index = pd.to_datetime(pivot_flows.index, utc=True)
-    pivot_flows = to_15min(pivot_flows)
-
-    ren = [
-        "SOLAR", "WIND-ONSHORE", "WIND-OFFSHORE",
-        "HYDRO-ROR", "HYDRO-WATER-RESERVOIR", "BIOMASS",
-    ]
-    ren_cols = [c for c in ren if c in gen.columns]
-    total_gen = gen.sum(axis=1)
-    renewable = gen[ren_cols].sum(axis=1) if ren_cols else pd.Series(0, index=gen.index)
-    gen = gen.copy()
-    gen["renewable_share"] = renewable / total_gen.replace(0, np.nan)
-
-    net_import = (
-        pivot_flows.sum(axis=1).to_frame("net_import")
-        if not pivot_flows.empty
-        else pd.DataFrame()
-    )
-
-    idx = load.index
-    features = pd.DataFrame(index=idx)
-    features["hour"] = idx.hour
-    features["dayofweek"] = idx.dayofweek
-    features["month"] = idx.month
-
-    for name, df in [
-        ("load", load),
-        ("renewable_share", gen[["renewable_share"]]),
-        ("net_import", net_import),
-    ]:
-        if not df.empty:
-            features = features.join(df.reindex(idx).ffill(), how="left")
-    features = features.join(weather.reindex(idx).ffill(), how="left")
-    features = features.dropna(how="all", axis=1)
-    return features
 
 
 @st.cache_data
 def get_features_df(zone: str, _zone_list: tuple[str, ...] = ()) -> pd.DataFrame | None:
     """Cached feature matrix for zone. _zone_list invalidates cache when zones change."""
     return build_features(zone)
-
-
-def _temporal_split(X: pd.DataFrame, y: pd.Series, val_frac: float, test_frac: float):
-    """Split temporally: train (rest), val (before last test_frac), test (last test_frac)."""
-    n = len(X)
-    n_test = int(n * test_frac)
-    n_val = int(n * val_frac)
-    n_train = n - n_val - n_test
-    if n_train < 10 or n_val < 5 or n_test < 5:
-        return None, None, None, None, None, None
-    X_train = X.iloc[:n_train]
-    y_train = y.iloc[:n_train]
-    X_val = X.iloc[n_train : n_train + n_val]
-    y_val = y.iloc[n_train : n_train + n_val]
-    X_test = X.iloc[-n_test:]
-    y_test = y.iloc[-n_test:]
-    return X_train, y_train, X_val, y_val, X_test, y_test
-
-
-def _train_xgb(X_tr, y_tr, X_va, y_va, seed: int):
-    dtrain = xgb.DMatrix(X_tr, label=y_tr)
-    dval = xgb.DMatrix(X_va, label=y_va)
-    params = {
-        "objective": "reg:squarederror", "eval_metric": "rmse",
-        "tree_method": "hist", "max_depth": 6, "eta": 0.05,
-        "subsample": 0.8, "colsample_bytree": 0.8, "seed": seed,
-    }
-    bst = xgb.train(params, dtrain, num_boost_round=2000, evals=[(dval, "val")],
-                    early_stopping_rounds=150, verbose_eval=False)
-    return bst
-
-
-def _train_lgb(X_tr, y_tr, X_va, y_va, seed: int):
-    model = lgb.LGBMRegressor(
-        objective="regression", metric="rmse",
-        num_leaves=63, learning_rate=0.05, max_depth=6,
-        subsample=0.8, colsample_bytree=0.8, random_state=seed,
-        n_estimators=2000, verbosity=-1,
-    )
-    model.fit(X_tr, y_tr, eval_set=[(X_va, y_va)],
-              callbacks=[lgb.early_stopping(150, verbose=False)])
-    return model
-
-
-def _train_cb(X_tr, y_tr, X_va, y_va, seed: int):
-    model = cb.CatBoostRegressor(
-        loss_function="RMSE", iterations=2000, learning_rate=0.05,
-        depth=6, subsample=0.8, rsm=0.8, random_seed=seed, verbose=False,
-    )
-    model.fit(X_tr, y_tr, eval_set=(X_va, y_va),
-              use_best_model=True, early_stopping_rounds=150)
-    return model
-
-
-def _predict_xgb(model, X):
-    return model.predict(xgb.DMatrix(X))
-
-
-def _predict_lgb(model, X):
-    return model.predict(X)
-
-
-def _predict_cb(model, X):
-    return model.predict(X)
-
-
-def _train_and_predict(
-    model_type: str,
-    X_train, y_train, X_val, y_val, X_test, y_test,
-    seeds: list[int],
-) -> tuple[np.ndarray, dict, callable]:
-    """Train model and return (y_pred_test, metrics_dict, predict_fn). predict_fn(X) returns predictions."""
-    y_pred_test = None
-    metrics = {}
-    predict_fn = None
-    feat_cols = list(X_train.columns)
-
-    if model_type == "RandomForest":
-        preds = []
-        for seed in seeds:
-            model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=seed)
-            model.fit(X_train, y_train)
-            preds.append(model.predict(X_test))
-        y_pred_test = np.mean(preds, axis=0)
-        model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=seeds[0])
-        model.fit(X_train, y_train)
-        metrics["feature_importance"] = pd.Series(model.feature_importances_, index=X_train.columns)
-        predict_fn = lambda X, m=model, fc=feat_cols: m.predict(X[fc] if isinstance(X, pd.DataFrame) else X)
-
-    elif model_type == "XGBoost" and HAS_XGB:
-        preds = []
-        for seed in seeds:
-            bst = _train_xgb(X_train.values, y_train.values, X_val.values, y_val.values, seed)
-            preds.append(_predict_xgb(bst, X_test))
-        y_pred_test = np.mean(preds, axis=0)
-        bst = _train_xgb(X_train.values, y_train.values, X_val.values, y_val.values, seeds[0])
-        score = bst.get_score(importance_type="gain")
-        imp = pd.Series(0.0, index=X_train.columns)
-        for k, v in score.items():
-            i = int(k[1:]) if k.startswith("f") else int(k)
-            if i < len(imp):
-                imp.iloc[i] = v
-        metrics["feature_importance"] = imp
-        predict_fn = lambda X, b=bst, fc=feat_cols: b.predict(xgb.DMatrix(X[fc].values if isinstance(X, pd.DataFrame) else X))
-
-    elif model_type == "LightGBM" and HAS_LGB:
-        preds = []
-        for seed in seeds:
-            m = _train_lgb(X_train, y_train, X_val, y_val, seed)
-            preds.append(_predict_lgb(m, X_test))
-        y_pred_test = np.mean(preds, axis=0)
-        m = _train_lgb(X_train, y_train, X_val, y_val, seeds[0])
-        metrics["feature_importance"] = pd.Series(m.feature_importances_, index=X_train.columns)
-        predict_fn = lambda X, mod=m, fc=feat_cols: mod.predict(X[fc] if isinstance(X, pd.DataFrame) else X)
-
-    elif model_type == "CatBoost" and HAS_CB:
-        preds = []
-        for seed in seeds:
-            m = _train_cb(X_train, y_train, X_val, y_val, seed)
-            preds.append(_predict_cb(m, X_test))
-        y_pred_test = np.mean(preds, axis=0)
-        m = _train_cb(X_train, y_train, X_val, y_val, seeds[0])
-        metrics["feature_importance"] = pd.Series(m.get_feature_importance(), index=X_train.columns)
-        predict_fn = lambda X, mod=m, fc=feat_cols: mod.predict(X[fc] if isinstance(X, pd.DataFrame) else X)
-
-    elif model_type == "Ensemble (avg)" and (HAS_XGB and HAS_LGB and HAS_CB):
-        preds = []
-        bst0 = lgb0 = cb0 = None
-        for s in seeds:
-            bst = _train_xgb(X_train.values, y_train.values, X_val.values, y_val.values, s)
-            m_lgb = _train_lgb(X_train, y_train, X_val, y_val, s)
-            m_cb = _train_cb(X_train, y_train, X_val, y_val, s)
-            if bst0 is None:
-                bst0, lgb0, cb0 = bst, m_lgb, m_cb
-            preds.append((_predict_xgb(bst, X_test) + _predict_lgb(m_lgb, X_test) + _predict_cb(m_cb, X_test)) / 3)
-        y_pred_test = np.mean(preds, axis=0)
-        metrics["feature_importance"] = None
-        def _ens_pred(X, b=bst0, l=lgb0, c=cb0, fc=feat_cols):
-            X_ = X[fc] if isinstance(X, pd.DataFrame) else X
-            return (_predict_xgb(b, X_) + _predict_lgb(l, X_) + _predict_cb(c, X_)) / 3
-        predict_fn = _ens_pred
-
-    elif model_type == "Stacking (Ridge)" and (HAS_XGB and HAS_LGB and HAS_CB):
-        p_xgb_va, p_lgb_va, p_cb_va = [], [], []
-        p_xgb_te, p_lgb_te, p_cb_te = [], [], []
-        bst0 = lgb0 = cb0 = None
-        for s in seeds:
-            bst = _train_xgb(X_train.values, y_train.values, X_val.values, y_val.values, s)
-            p_xgb_va.append(_predict_xgb(bst, X_val))
-            p_xgb_te.append(_predict_xgb(bst, X_test))
-            m_lgb = _train_lgb(X_train, y_train, X_val, y_val, s)
-            p_lgb_va.append(_predict_lgb(m_lgb, X_val))
-            p_lgb_te.append(_predict_lgb(m_lgb, X_test))
-            m_cb = _train_cb(X_train, y_train, X_val, y_val, s)
-            p_cb_va.append(_predict_cb(m_cb, X_val))
-            p_cb_te.append(_predict_cb(m_cb, X_test))
-            if bst0 is None:
-                bst0, lgb0, cb0 = bst, m_lgb, m_cb
-        P_va = np.column_stack([np.mean(p_xgb_va, 0), np.mean(p_lgb_va, 0), np.mean(p_cb_va, 0)])
-        P_te = np.column_stack([np.mean(p_xgb_te, 0), np.mean(p_lgb_te, 0), np.mean(p_cb_te, 0)])
-        ridge = Ridge(alpha=1.0).fit(P_va, y_val.values)
-        y_pred_test = ridge.predict(P_te)
-        metrics["feature_importance"] = None
-        def _stack_pred(X, b=bst0, l=lgb0, c=cb0, r=ridge, fc=feat_cols):
-            X_ = X[fc] if isinstance(X, pd.DataFrame) else X
-            P = np.column_stack([_predict_xgb(b, X_), _predict_lgb(l, X_), _predict_cb(c, X_)])
-            return r.predict(P)
-        predict_fn = _stack_pred
-
-    elif model_type == "Stacking (MLP)" and (HAS_XGB and HAS_LGB and HAS_CB):
-        p_xgb_va, p_lgb_va, p_cb_va = [], [], []
-        p_xgb_te, p_lgb_te, p_cb_te = [], [], []
-        bst0 = lgb0 = cb0 = None
-        for s in seeds:
-            bst = _train_xgb(X_train.values, y_train.values, X_val.values, y_val.values, s)
-            p_xgb_va.append(_predict_xgb(bst, X_val))
-            p_xgb_te.append(_predict_xgb(bst, X_test))
-            m_lgb = _train_lgb(X_train, y_train, X_val, y_val, s)
-            p_lgb_va.append(_predict_lgb(m_lgb, X_val))
-            p_lgb_te.append(_predict_lgb(m_lgb, X_test))
-            m_cb = _train_cb(X_train, y_train, X_val, y_val, s)
-            p_cb_va.append(_predict_cb(m_cb, X_val))
-            p_cb_te.append(_predict_cb(m_cb, X_test))
-            if bst0 is None:
-                bst0, lgb0, cb0 = bst, m_lgb, m_cb
-        P_va = np.column_stack([np.mean(p_xgb_va, 0), np.mean(p_lgb_va, 0), np.mean(p_cb_va, 0)])
-        P_te = np.column_stack([np.mean(p_xgb_te, 0), np.mean(p_lgb_te, 0), np.mean(p_cb_te, 0)])
-        mlp = MLPRegressor(hidden_layer_sizes=(32, 16), alpha=0.1, max_iter=500, early_stopping=True, random_state=42)
-        mlp.fit(P_va, y_val.values)
-        y_pred_test = mlp.predict(P_te)
-        metrics["feature_importance"] = None
-        def _stack_pred(X, b=bst0, l=lgb0, c=cb0, m=mlp, fc=feat_cols):
-            X_ = X[fc] if isinstance(X, pd.DataFrame) else X
-            P = np.column_stack([_predict_xgb(b, X_), _predict_lgb(l, X_), _predict_cb(c, X_)])
-            return m.predict(P)
-        predict_fn = _stack_pred
-
-    if y_pred_test is not None:
-        metrics["mae"] = mean_absolute_error(y_test, y_pred_test)
-        metrics["rmse"] = float(np.sqrt(mean_squared_error(y_test, y_pred_test)))
-        metrics["r2"] = r2_score(y_test, y_pred_test)
-        metrics["n_test"] = len(y_test)
-
-    return y_pred_test, metrics, predict_fn
 
 
 # Display names for dropdown only — edit here to add labels like (lightest), (best)
@@ -518,7 +248,7 @@ def plot_prediction(zone: str, start: str, end: str) -> None:
                 st.error("Insufficient data in selected range. Need at least 100 samples.")
                 return
 
-            split = _temporal_split(X_range, y_range, VAL_FRAC, TEST_FRAC)
+            split = temporal_split(X_range, y_range, VAL_FRAC, TEST_FRAC)
             if split[0] is None:
                 st.error("Could not create train/val/test split. Try a longer date range.")
                 return
@@ -550,12 +280,13 @@ def plot_prediction(zone: str, start: str, end: str) -> None:
                     return np.array(p) if p is not None else None
                 predict_fn = _api_predict_fn
             else:
-                y_pred_test, metrics, predict_fn = _train_and_predict(
+                y_pred_test, metrics, artifact = train_and_predict(
                     model_type, X_train, y_train, X_val, y_val, X_test, y_test, seeds
                 )
                 if y_pred_test is None:
                     st.error(f"Model '{model_type}' not available. Install xgboost, lightgbm, catboost.")
                     return
+                predict_fn = lambda X, a=artifact: predict_from_artifact(a, X)
 
             test_start = y_test.index[0]
             test_end = y_test.index[-1]
@@ -703,15 +434,16 @@ def plot_prediction(zone: str, start: str, end: str) -> None:
                             X_before = X_full.loc[X_full.index <= before_end][feat_cols].dropna()
                             y_before = y_full.loc[X_before.index].squeeze()
                             if len(X_before) >= 100:
-                                split = _temporal_split(X_before, y_before, VAL_FRAC, TEST_FRAC)
+                                split = temporal_split(X_before, y_before, VAL_FRAC, TEST_FRAC)
                                 if split[0] is not None:
                                     X_tr, y_tr, X_va, y_va, _, _ = split
                                     y_chunk = y_full.loc[X_chunk.index].squeeze()
                                     with st.spinner("Retraining model..."):
-                                        _, _, pred_fn = _train_and_predict(
+                                        _, _, artifact = train_and_predict(
                                             res["model_type"], X_tr, y_tr, X_va, y_va,
                                             X_chunk, y_chunk, SEED_POOL[: res.get("n_seeds", 1)],
                                         )
+                                    pred_fn = lambda X, a=artifact: predict_from_artifact(a, X)
                                     pred = pred_fn(X_chunk) if pred_fn is not None else predict_fn(X_chunk)
                                 else:
                                     pred = predict_fn(X_chunk)

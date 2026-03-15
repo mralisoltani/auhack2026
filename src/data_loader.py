@@ -8,10 +8,8 @@ from typing import Optional
 import glob
 import pandas as pd
 
+from src.config import DATA_ROOT
 from src.zone_registry import get_spot_zones, get_flow_zones
-
-# Default paths - override for different environments
-DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 
 # Zone mapping for weather only (DK1/DK2 share DK weather file)
 ZONE_TO_WEATHER = {"DK1": "DK", "DK2": "DK"}

@@ -22,4 +22,5 @@ Thumbs.db
 
 # Project-specific
 models/
+catboost_info/
 *.log

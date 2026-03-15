@@ -35,7 +35,7 @@ Transform raw generation, load, and weather feeds into high-value charts
 ### 3. Model Engineering: Feature Relevance & Training
 Select the most impactful features and train your models
 <p align="center">
-  <img src="./docs/train_data.gif" width="70%">
+  <img src="./docs/train.gif" width="70%">
 </p>
 
 
